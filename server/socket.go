@@ -3,21 +3,24 @@ package server
 import (
 	"fmt"
 	"net"
+	"time"
 )
 
 //服务结构
 type Server struct {
-	ip        string
-	port      int
-	OnError   func(error)
-	OnMessage func(*AppSession, []byte)
+	ip            string
+	port          int
+	clientCounter int64
+	OnError       func(error)
+	OnMessage     func(*AppSession, []byte)
 }
 
 //新建一个服务
 func New(ip string, port int) *Server {
 	return &Server{
-		ip:   ip,
-		port: port,
+		ip:            ip,
+		port:          port,
+		clientCounter: 0,
 	}
 }
 
@@ -54,28 +57,34 @@ func (server *Server) Start() {
 			continue
 		}
 
+		//客户端ID数+1
+		server.clientCounter++
+
+		appSession := &AppSession{
+			ID:             server.clientCounter,
+			conn:           conn,
+			activeDateTime: time.Now(),
+		}
+
 		//启用goroutine处理
-		go handleClient(server, conn)
+		go handleClient(server, appSession)
 	}
 }
 
 //读取数据
-func handleClient(server *Server, conn net.Conn) {
+func handleClient(server *Server, session *AppSession) {
 	//获取连接地址
-	remoteAddr := conn.RemoteAddr()
+	remoteAddr := session.conn.RemoteAddr()
 
-	fmt.Println("客户地址:", remoteAddr)
-
-	//定义一个数据接收Buffer
-	var buf [10240]byte
+	fmt.Println("客户[", session.ID, "]地址:", remoteAddr)
 
 	for {
-		fmt.Println("等待接收数据...")
-		//读取数据,io.Reader 需要传入一个byte切片
-		n, err := conn.Read(buf[0:])
+		fmt.Println("等待接收客户[", session.ID, "]的数据...", session.activeDateTime)
+
+		bytes, err := session.Read()
 
 		if err != nil {
-			fmt.Println("数据接收错误, ", err)
+			fmt.Println("客户[", session.ID, "]数据接收错误, ", err)
 			if server.OnError != nil {
 				server.OnError(err)
 			}
@@ -86,8 +95,6 @@ func handleClient(server *Server, conn net.Conn) {
 			fmt.Println("错误,未找到数据处理方法!")
 			continue
 		}
-		server.OnMessage(&AppSession{
-			conn: conn,
-		}, buf[0:n])
+		server.OnMessage(session, bytes)
 	}
 }

@@ -23,7 +23,7 @@ func onMessage(client *server.AppSession, bytes []byte) {
 	result := string(bytes)
 
 	//输出结果
-	fmt.Println("接收到数据:", result)
+	fmt.Println("接收到客户[", client.ID, "]数据:", result)
 
 	client.Send([]byte("Got!"))
 }
