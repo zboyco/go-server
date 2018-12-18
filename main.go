@@ -22,15 +22,23 @@ func main() {
 	//程序返回后关闭socket
 	defer tcpListener.Close()
 
-	fmt.Println("等待客户连接...")
+	for {
+		fmt.Println("等待客户连接...")
 
-	//开始接收连接
-	conn, err := tcpListener.Accept()
+		//开始接收连接
+		conn, err := tcpListener.Accept()
 
-	if err != nil {
-		fmt.Println("客户连接失败, ", err)
+		if err != nil {
+			fmt.Println("客户连接失败, ", err)
+			continue
+		}
+
+		//启用goroutine处理
+		go handleClient(conn)
 	}
+}
 
+func handleClient(conn net.Conn) {
 	//获取连接地址
 	remoteAddr := conn.RemoteAddr()
 
