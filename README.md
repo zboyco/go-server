@@ -10,3 +10,6 @@
 将数据读取放入单独的方法中,利用goroutine运行
 
 4. 将创建socket的方法放入单独的包中
+
+5. 将读取的数据处理方法作为参数传入server中
+OnMessage 和 OnError 通过Server结构公开变量传入
