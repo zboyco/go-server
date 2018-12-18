@@ -10,7 +10,7 @@ type Server struct {
 	ip        string
 	port      int
 	OnError   func(error)
-	OnMessage func([]byte)
+	OnMessage func(*AppSession, []byte)
 }
 
 //新建一个服务
@@ -86,6 +86,8 @@ func handleClient(server *Server, conn net.Conn) {
 			fmt.Println("错误,未找到数据处理方法!")
 			continue
 		}
-		server.OnMessage(buf[0:n])
+		server.OnMessage(&AppSession{
+			conn: conn,
+		}, buf[0:n])
 	}
 }
