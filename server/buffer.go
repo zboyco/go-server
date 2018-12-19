@@ -21,7 +21,7 @@ func (instance *buffer) len() int {
 	return instance.end - instance.start
 }
 
-//cleanBuf 清理缓存中已提取的数据
+// 清理缓存中已提取的数据
 func (instance *buffer) cleanBuf() {
 	if instance.start == 0 {
 		return
@@ -31,7 +31,7 @@ func (instance *buffer) cleanBuf() {
 	instance.start = 0
 }
 
-//read 接收数据
+// 接收数据
 func (instance *buffer) read() (int, error) {
 	instance.cleanBuf()
 	n, err := instance.reader.Read(instance.buf[instance.end:])
@@ -42,7 +42,7 @@ func (instance *buffer) read() (int, error) {
 	return n, nil
 }
 
-//peek 查看指定长度字节数据
+// 查看指定长度字节数据
 func (instance *buffer) peek(len int) ([]byte, error) {
 	if instance.len() < len {
 		return nil, errors.New("可读取长度不够")
@@ -51,7 +51,7 @@ func (instance *buffer) peek(len int) ([]byte, error) {
 	return result, nil
 }
 
-//pick 提取指定长度字节数据
+// 提取指定长度字节数据
 func (instance *buffer) pick(offset int, len int) ([]byte, error) {
 	result, err := instance.peek(offset + len)
 	if err != nil {

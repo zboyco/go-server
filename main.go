@@ -17,7 +17,7 @@ func main() {
 	mainServer.Start()
 }
 
-//接收数据方法
+// 接收数据方法
 func onMessage(client *server.AppSession, bytes []byte) {
 	//将bytes转为字符串
 	result := string(bytes)
@@ -28,7 +28,7 @@ func onMessage(client *server.AppSession, bytes []byte) {
 	// client.Send([]byte("Got!"))
 }
 
-//接收错误方法
+// 接收错误方法
 func onError(err error) {
 	//输出结果
 	fmt.Println("错误: ", err)
