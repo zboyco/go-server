@@ -8,10 +8,10 @@ import (
 )
 
 const (
+	//HeaderLen 数据包头长度
+	HeaderLen int = 4
 	//HeaderStartByte 数据包头部起始码
 	HeaderStartByte byte = '$'
-	//HeaderLen 数据包头长度
-	HeaderLen int = 2
 	//HeaderEndByte 数据包头部结束码
 	HeaderEndByte byte = '#'
 )
@@ -34,7 +34,8 @@ func (session *AppSession) Send(buf []byte) {
 //Read 读取数据
 //每次读取必然返回一个完整数据包或者错误信息
 func (session *AppSession) Read() ([]byte, error) {
-	var needRead bool
+	//判断是否需要读取数据
+	needRead := session.buffer.len() < HeaderLen
 	for {
 		if needRead {
 			_, err := session.buffer.read()
@@ -43,7 +44,7 @@ func (session *AppSession) Read() ([]byte, error) {
 			}
 		}
 		//查看前4个数据包头数据
-		headBuf, err := session.buffer.peek(HeaderLen + 2)
+		headBuf, err := session.buffer.peek(HeaderLen)
 
 		if err != nil {
 			needRead = true
@@ -59,7 +60,7 @@ func (session *AppSession) Read() ([]byte, error) {
 		bodyLen := int(binary.BigEndian.Uint16(headBuf[1:3]))
 
 		//提取数据内容
-		bodyBuf, err := session.buffer.pick(HeaderLen+2, bodyLen)
+		bodyBuf, err := session.buffer.pick(HeaderLen, bodyLen)
 
 		if err != nil {
 			needRead = true
