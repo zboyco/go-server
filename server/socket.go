@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-//服务结构
+//Server 服务结构
 type Server struct {
 	ip            string
 	port          int
@@ -15,7 +15,7 @@ type Server struct {
 	OnMessage     func(*AppSession, []byte)
 }
 
-//新建一个服务
+//New 新建一个服务
 func New(ip string, port int) *Server {
 	return &Server{
 		ip:            ip,
@@ -24,7 +24,7 @@ func New(ip string, port int) *Server {
 	}
 }
 
-//开始监听
+//Start 开始监听
 func (server *Server) Start() {
 	//定义一个本机端口
 	localAddress, _ := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", server.ip, server.port))
@@ -64,6 +64,7 @@ func (server *Server) Start() {
 			ID:             server.clientCounter,
 			conn:           conn,
 			activeDateTime: time.Now(),
+			buffer:         newBuffer(conn, 1024*512),
 		}
 
 		//启用goroutine处理
@@ -71,7 +72,7 @@ func (server *Server) Start() {
 	}
 }
 
-//读取数据
+//handleClient 读取数据
 func handleClient(server *Server, session *AppSession) {
 	//获取连接地址
 	remoteAddr := session.conn.RemoteAddr()

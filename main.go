@@ -25,7 +25,7 @@ func onMessage(client *server.AppSession, bytes []byte) {
 	//输出结果
 	fmt.Println("接收到客户[", client.ID, "]数据:", result)
 
-	client.Send([]byte("Got!"))
+	// client.Send([]byte("Got!"))
 }
 
 //接收错误方法
