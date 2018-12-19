@@ -2,13 +2,18 @@ package server
 
 import (
 	"encoding/binary"
+	"errors"
 	"net"
 	"time"
 )
 
 const (
+	//HeaderStartByte 数据包头部起始码
+	HeaderStartByte byte = '$'
 	//HeaderLen 数据包头长度
 	HeaderLen int = 2
+	//HeaderEndByte 数据包头部结束码
+	HeaderEndByte byte = '#'
 )
 
 //AppSession 客户端结构体
@@ -37,16 +42,24 @@ func (session *AppSession) Read() ([]byte, error) {
 				return nil, err
 			}
 		}
-		headBuf, err := session.buffer.peek(HeaderLen)
+		//查看前4个数据包头数据
+		headBuf, err := session.buffer.peek(HeaderLen + 2)
 
 		if err != nil {
 			needRead = true
 			continue
 		}
 
-		bodyLen := int(binary.BigEndian.Uint16(headBuf))
+		//判断1和4位是否为指定的起始码和结束码
+		if headBuf[0] != HeaderStartByte || headBuf[3] != HeaderEndByte {
+			return nil, errors.New("接收到异常数据")
+		}
 
-		bodyBuf, err := session.buffer.pick(HeaderLen, bodyLen)
+		//计算数据包内容长度
+		bodyLen := int(binary.BigEndian.Uint16(headBuf[1:3]))
+
+		//提取数据内容
+		bodyBuf, err := session.buffer.pick(HeaderLen+2, bodyLen)
 
 		if err != nil {
 			needRead = true

@@ -44,13 +44,13 @@ func (server *Server) Start() {
 	defer tcpListener.Close()
 
 	for {
-		fmt.Println("等待客户连接...")
+		fmt.Println("等待客户端连接...")
 
 		//开始接收连接
 		conn, err := tcpListener.Accept()
 
 		if err != nil {
-			fmt.Println("客户连接失败, ", err)
+			fmt.Println("客户端连接失败, ", err)
 			if server.OnError != nil {
 				server.OnError(err)
 			}
@@ -77,18 +77,20 @@ func handleClient(server *Server, session *AppSession) {
 	//获取连接地址
 	remoteAddr := session.conn.RemoteAddr()
 
-	fmt.Println("客户[", session.ID, "]地址:", remoteAddr)
+	fmt.Println("客户端[", session.ID, "]地址:", remoteAddr)
 
 	for {
-		fmt.Println("等待接收客户[", session.ID, "]的数据...", session.activeDateTime)
+		fmt.Println("等待接收客户端[", session.ID, "]的数据...", session.activeDateTime)
 
 		bytes, err := session.Read()
 
 		if err != nil {
-			fmt.Println("客户[", session.ID, "]数据接收错误, ", err)
+			fmt.Println("客户端[", session.ID, "]数据接收错误, ", err)
 			if server.OnError != nil {
 				server.OnError(err)
 			}
+			session.conn.Close()
+			fmt.Println("客户端[", session.ID, "]连接已关闭!")
 			return
 		}
 
