@@ -8,7 +8,7 @@ import (
 func main() {
 	fmt.Println("hello golang!!!")
 
-	mainServer := server.New("127.0.0.1", 9043)
+	mainServer := server.New("127.0.0.1", 9043, 60, 40)
 
 	mainServer.OnMessage = onMessage
 

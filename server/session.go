@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 )
@@ -16,7 +17,7 @@ const (
 	HeaderEndByte byte = '#'
 )
 
-// 客户端结构体
+// AppSession 客户端结构体
 type AppSession struct {
 	ID             int64     //连接唯一标识
 	conn           net.Conn  //socket连接
@@ -24,14 +25,14 @@ type AppSession struct {
 	buffer         *buffer   //数据流
 }
 
-// 发送数据
+// Send 发送数据
 func (session *AppSession) Send(buf []byte) {
 	session.conn.Write(buf)
 	//更新最后活跃时间
 	session.activeDateTime = time.Now()
 }
 
-// 读取数据
+// Read 读取数据
 // 每次读取必然返回一个完整数据包或者错误信息
 func (session *AppSession) Read() ([]byte, error) {
 	//判断是否需要读取数据
@@ -71,4 +72,10 @@ func (session *AppSession) Read() ([]byte, error) {
 		session.activeDateTime = time.Now()
 		return bodyBuf, nil
 	}
+}
+
+// Close 关闭连接
+func (session *AppSession) Close(reason string) {
+	session.conn.Close()
+	fmt.Println("客户端[", session.ID, "]连接已关闭!")
 }

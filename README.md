@@ -42,3 +42,7 @@
 9. 采用标准库scanner实现数据分离处理粘包
 
     参考http://feixiao.github.io/2016/05/08/bufio/
+
+10. 添加Session容器,增加超时自动关闭Session功能
+
+    
