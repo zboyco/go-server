@@ -13,18 +13,22 @@ import (
 
 // Server 服务结构
 type Server struct {
-	ip                       string                //服务器IP
-	port                     int                   //服务器端口
-	clientCounter            int64                 //计数器
-	sessionSource            map[int64]*AppSession //Seesion池
-	mutex                    sync.Mutex            // 锁
-	idleSessionTimeOut       int                   //客户端空闲超时时间
-	clearIdleSessionInterval int                   //清空空闲会话的时间间隔,为0则不清理
+	ip                       string         //服务器IP
+	port                     int            //服务器端口
+	clientCounter            int64          //计数器
+	sessionSource            *sessionSource //Seesion池
+	idleSessionTimeOut       int            //客户端空闲超时时间
+	clearIdleSessionInterval int            //清空空闲会话的时间间隔,为0则不清理
 
 	OnError              func(error)               //错误方法
 	OnMessage            func(*AppSession, []byte) //接收到新消息
 	OnNewSessionRegister func(*AppSession)         //新客户端接入
 	OnSessionClosed      func(*AppSession, string) //客户端关闭通知
+}
+
+type sessionSource struct {
+	source map[int64]*AppSession //Seesion池
+	mutex  sync.Mutex            //锁
 }
 
 // New 新建一个服务
@@ -33,7 +37,7 @@ func New(ip string, port int, idleSessionTimeOut int, clearIdleSessionInterval i
 		ip:                       ip,
 		port:                     port,
 		clientCounter:            0,
-		sessionSource:            make(map[int64]*AppSession),
+		sessionSource:            &sessionSource{source: make(map[int64]*AppSession)},
 		idleSessionTimeOut:       idleSessionTimeOut,
 		clearIdleSessionInterval: clearIdleSessionInterval,
 	}
@@ -100,12 +104,14 @@ func (server *Server) Start() {
 
 // registerSession 注册session
 func (server *Server) registerSession(sessionID int64, appSession *AppSession) (bool, error) {
-	if server.sessionSource[sessionID] != nil {
+	if server.sessionSource.source[sessionID] != nil {
 		return false, errors.New("SessionID已存在")
 	}
 
 	// 加入池
-	server.sessionSource[sessionID] = appSession
+	server.sessionSource.mutex.Lock()
+	server.sessionSource.source[sessionID] = appSession
+	server.sessionSource.mutex.Unlock()
 
 	// 新客户端接入通知
 	if server.OnNewSessionRegister != nil {
@@ -127,16 +133,16 @@ func (server *Server) clearTimeoutSession(timeoutSecond int, interval int) {
 		time.Sleep(time.Duration(interval) * time.Second)
 
 		currentTime = time.Now()
-		server.mutex.Lock()
+		server.sessionSource.mutex.Lock()
 		{
-			for key, session := range server.sessionSource {
+			for key, session := range server.sessionSource.source {
 				if session.activeDateTime.Add(time.Duration(timeoutSecond) * time.Second).Before(currentTime) {
 					fmt.Println("客户端[", key, "]超时关闭")
 					session.Close("Timeout")
 				}
 			}
 		}
-		server.mutex.Unlock()
+		server.sessionSource.mutex.Unlock()
 	}
 }
 
@@ -211,5 +217,9 @@ func (server *Server) handleClient(session *AppSession) {
 // closeSession 关闭session
 func (server *Server) closeSession(session *AppSession, reason string) {
 	session.Close(reason)
-	delete(server.sessionSource, session.ID)
+
+	// 从池中移除
+	server.sessionSource.mutex.Lock()
+	delete(server.sessionSource.source, session.ID)
+	server.sessionSource.mutex.Unlock()
 }
