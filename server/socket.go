@@ -91,7 +91,6 @@ func (server *Server) Start() {
 			ID:             server.clientCounter,
 			conn:           conn,
 			activeDateTime: time.Now(),
-			buffer:         newBuffer(conn, 1024*512),
 		}
 
 		// 注册Session
