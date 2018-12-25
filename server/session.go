@@ -1,7 +1,7 @@
 package server
 
 import (
-	"fmt"
+	"log"
 	"net"
 	"time"
 )
@@ -32,5 +32,5 @@ func (session *AppSession) Send(buf []byte) {
 // Close 关闭连接
 func (session *AppSession) Close(reason string) {
 	session.conn.Close()
-	fmt.Println("客户端[", session.ID, "]连接已关闭!")
+	log.Println("客户端[", session.ID, "]连接已关闭!")
 }

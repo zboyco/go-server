@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -13,31 +14,35 @@ import (
 
 // Server 服务结构
 type Server struct {
-	ip                       string         //服务器IP
-	port                     int            //服务器端口
-	clientCounter            int64          //计数器
-	sessionSource            *sessionSource //Seesion池
-	idleSessionTimeOut       int            //客户端空闲超时时间
-	clearIdleSessionInterval int            //清空空闲会话的时间间隔,为0则不清理
+	ip                       string         // 服务器IP
+	port                     int            // 服务器端口
+	clientCounter            int64          // 计数器
+	sessionSource            *sessionSource // Seesion池
+	idleSessionTimeOut       int            // 客户端空闲超时时间
+	clearIdleSessionInterval int            // 清空空闲会话的时间间隔,为0则不清理
 
-	OnError              func(error)               //错误方法
-	OnMessage            func(*AppSession, []byte) //接收到新消息
-	OnNewSessionRegister func(*AppSession)         //新客户端接入
-	OnSessionClosed      func(*AppSession, string) //客户端关闭通知
+	OnError              func(error)               // 错误方法
+	OnMessage            func(*AppSession, []byte) // 接收到新消息
+	OnNewSessionRegister func(*AppSession)         // 新客户端接入
+	OnSessionClosed      func(*AppSession, string) // 客户端关闭通知
 }
 
 type sessionSource struct {
-	source map[int64]*AppSession //Seesion池
-	mutex  sync.Mutex            //锁
+	source map[int64]*AppSession // Seesion池
+	list   chan *AppSession      // 注册Session的通道
+	mutex  sync.Mutex            // 锁
 }
 
 // New 新建一个服务
 func New(ip string, port int, idleSessionTimeOut int, clearIdleSessionInterval int) *Server {
 	return &Server{
-		ip:                       ip,
-		port:                     port,
-		clientCounter:            0,
-		sessionSource:            &sessionSource{source: make(map[int64]*AppSession)},
+		ip:            ip,
+		port:          port,
+		clientCounter: 0,
+		sessionSource: &sessionSource{
+			source: make(map[int64]*AppSession),
+			list:   make(chan *AppSession, 1000),
+		},
 		idleSessionTimeOut:       idleSessionTimeOut,
 		clearIdleSessionInterval: clearIdleSessionInterval,
 	}
@@ -46,7 +51,7 @@ func New(ip string, port int, idleSessionTimeOut int, clearIdleSessionInterval i
 // Start 开始监听
 func (server *Server) Start() {
 	if server.OnMessage == nil {
-		fmt.Println("错误,未找到数据处理方法!")
+		log.Println("错误,未找到数据处理方法!")
 		return
 	}
 
@@ -57,7 +62,7 @@ func (server *Server) Start() {
 	tcpListener, err := net.ListenTCP("tcp", localAddress)
 
 	if err != nil {
-		fmt.Println("监听出错, ", err)
+		log.Println("监听出错, ", err)
 		if server.OnError != nil {
 			server.OnError(err)
 		}
@@ -67,17 +72,20 @@ func (server *Server) Start() {
 	// 程序返回后关闭socket
 	defer tcpListener.Close()
 
+	// 开启Session注册
+	go server.registerSession()
+
 	// 开启定时清理Session方法
 	go server.clearTimeoutSession(server.idleSessionTimeOut, server.clearIdleSessionInterval)
 
 	for {
-		fmt.Println("等待客户端连接...")
+		log.Println("等待客户端连接...")
 
 		// 开始接收连接
 		conn, err := tcpListener.Accept()
 
 		if err != nil {
-			fmt.Println("客户端连接失败, ", err)
+			log.Println("客户端连接失败, ", err)
 			if server.OnError != nil {
 				server.OnError(err)
 			}
@@ -93,31 +101,25 @@ func (server *Server) Start() {
 			activeDateTime: time.Now(),
 		}
 
-		// 注册Session
-		server.registerSession(appSession.ID, appSession)
-
 		// 启用goroutine处理
 		go server.handleClient(appSession)
 	}
 }
 
 // registerSession 注册session
-func (server *Server) registerSession(sessionID int64, appSession *AppSession) (bool, error) {
-	if server.sessionSource.source[sessionID] != nil {
-		return false, errors.New("SessionID已存在")
+func (server *Server) registerSession() {
+	for {
+		session, ok := <-server.sessionSource.list
+
+		if !ok {
+			log.Println("Session池通道关闭")
+			return
+		}
+		// 加入池
+		server.sessionSource.mutex.Lock()
+		server.sessionSource.source[session.ID] = session
+		server.sessionSource.mutex.Unlock()
 	}
-
-	// 加入池
-	server.sessionSource.mutex.Lock()
-	server.sessionSource.source[sessionID] = appSession
-	server.sessionSource.mutex.Unlock()
-
-	// 新客户端接入通知
-	if server.OnNewSessionRegister != nil {
-		server.OnNewSessionRegister(appSession)
-	}
-
-	return true, nil
 }
 
 // clearTimeoutSession 周期性清理闲置Seesion
@@ -136,7 +138,7 @@ func (server *Server) clearTimeoutSession(timeoutSecond int, interval int) {
 		{
 			for key, session := range server.sessionSource.source {
 				if session.activeDateTime.Add(time.Duration(timeoutSecond) * time.Second).Before(currentTime) {
-					fmt.Println("客户端[", key, "]超时关闭")
+					log.Println("客户端[", key, "]超时关闭")
 					session.Close("Timeout")
 				}
 			}
@@ -150,20 +152,20 @@ func (server *Server) clearTimeoutSession(timeoutSecond int, interval int) {
 // 	//获取连接地址
 // 	remoteAddr := session.conn.RemoteAddr()
 
-// 	fmt.Println("客户端[", session.ID, "]地址:", remoteAddr)
+// 	log.Println("客户端[", session.ID, "]地址:", remoteAddr)
 
 // 	for {
-// 		fmt.Println("等待接收客户端[", session.ID, "]的数据...", session.activeDateTime)
+// 		log.Println("等待接收客户端[", session.ID, "]的数据...", session.activeDateTime)
 
 // 		bytes, err := session.Read()
 
 // 		if err != nil {
-// 			fmt.Println("客户端[", session.ID, "]数据接收错误, ", err)
+// 			log.Println("客户端[", session.ID, "]数据接收错误, ", err)
 // 			if server.OnError != nil {
 // 				server.OnError(err)
 // 			}
 // 			session.conn.Close()
-// 			fmt.Println("客户端[", session.ID, "]连接已关闭!")
+// 			log.Println("客户端[", session.ID, "]连接已关闭!")
 // 			return
 // 		}
 // 		server.OnMessage(session, bytes)
@@ -175,7 +177,15 @@ func (server *Server) handleClient(session *AppSession) {
 	// 获取连接地址
 	remoteAddr := session.conn.RemoteAddr()
 
-	fmt.Println("客户端[", session.ID, "]地址:", remoteAddr)
+	log.Println("客户端[", session.ID, "]地址:", remoteAddr)
+
+	// 新客户端接入通知
+	if server.OnNewSessionRegister != nil {
+		server.OnNewSessionRegister(session)
+	}
+
+	// 注册Session
+	server.sessionSource.list <- session
 
 	// 创建scanner
 	scanner := bufio.NewScanner(session.conn)
@@ -208,7 +218,7 @@ func (server *Server) handleClient(session *AppSession) {
 
 	// 错误处理
 	if err := scanner.Err(); err != nil {
-		fmt.Println("客户端[", session.ID, "]数据接收错误, ", err)
+		log.Println("客户端[", session.ID, "]数据接收错误, ", err)
 		server.closeSession(session, err.Error())
 	}
 }
