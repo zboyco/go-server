@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"sync"
 	"time"
 )
 
@@ -25,12 +24,6 @@ type Server struct {
 	OnMessage            func(*AppSession, []byte) // 接收到新消息
 	OnNewSessionRegister func(*AppSession)         // 新客户端接入
 	OnSessionClosed      func(*AppSession, string) // 客户端关闭通知
-}
-
-type sessionSource struct {
-	source map[int64]*AppSession // Seesion池
-	list   chan *AppSession      // 注册Session的通道
-	mutex  sync.Mutex            // 锁
 }
 
 // New 新建一个服务
@@ -108,43 +101,12 @@ func (server *Server) Start() {
 
 // registerSession 注册session
 func (server *Server) registerSession() {
-	for {
-		session, ok := <-server.sessionSource.list
-
-		if !ok {
-			log.Println("Session池通道关闭")
-			return
-		}
-		// 加入池
-		server.sessionSource.mutex.Lock()
-		server.sessionSource.source[session.ID] = session
-		server.sessionSource.mutex.Unlock()
-	}
+	server.sessionSource.registerSession()
 }
 
 // clearTimeoutSession 周期性清理闲置Seesion
 func (server *Server) clearTimeoutSession(timeoutSecond int, interval int) {
-	var currentTime time.Time
-
-	if interval == 0 {
-		return
-	}
-
-	for {
-		time.Sleep(time.Duration(interval) * time.Second)
-
-		currentTime = time.Now()
-		server.sessionSource.mutex.Lock()
-		{
-			for key, session := range server.sessionSource.source {
-				if session.activeDateTime.Add(time.Duration(timeoutSecond) * time.Second).Before(currentTime) {
-					log.Println("客户端[", key, "]超时关闭")
-					session.Close("Timeout")
-				}
-			}
-		}
-		server.sessionSource.mutex.Unlock()
-	}
+	server.sessionSource.clearTimeoutSession(timeoutSecond, interval)
 }
 
 // // 读取数据
