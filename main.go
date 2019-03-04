@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"go-server/server"
+
+	"github.com/zboyco/go-server/server"
 )
 
 func main() {
