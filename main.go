@@ -1,8 +1,9 @@
 package main
 
 import (
-	"go-server/server"
 	"log"
+
+	"github.com/zboyco/go-server/server"
 )
 
 func main() {
