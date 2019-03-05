@@ -66,10 +66,10 @@ func (server *Server) Start() {
 	defer tcpListener.Close()
 
 	// 开启Session注册
-	go server.startRegisterSession()
+	server.startRegisterSession()
 
 	// 开启定时清理Session方法
-	go server.startClearTimeoutSession(server.idleSessionTimeOut, server.clearIdleSessionInterval)
+	server.startClearTimeoutSession(server.idleSessionTimeOut, server.clearIdleSessionInterval)
 
 	for {
 		log.Println("等待客户端连接...")
@@ -101,12 +101,12 @@ func (server *Server) Start() {
 
 // startRegisterSession 注册session
 func (server *Server) startRegisterSession() {
-	server.sessionSource.registerSession()
+	go server.sessionSource.registerSession()
 }
 
 // startClearTimeoutSession 周期性清理闲置Seesion
 func (server *Server) startClearTimeoutSession(timeoutSecond int, interval int) {
-	server.sessionSource.clearTimeoutSession(timeoutSecond, interval)
+	go server.sessionSource.clearTimeoutSession(timeoutSecond, interval)
 }
 
 // // 读取数据

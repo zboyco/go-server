@@ -7,7 +7,6 @@ import (
 )
 
 func main() {
-	log.Println("hello golang!!!")
 
 	mainServer := server.New("127.0.0.1", 9043, 10, 6)
 
