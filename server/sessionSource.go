@@ -12,6 +12,11 @@ type sessionSource struct {
 	mutex  sync.Mutex            // 锁
 }
 
+// addSession 添加session到池中
+func (s *sessionSource) addSession(session *AppSession) {
+	s.list <- session
+}
+
 // registerSession 注册session
 func (s *sessionSource) registerSession() {
 	for {
@@ -51,4 +56,11 @@ func (s *sessionSource) clearTimeoutSession(timeoutSecond int, interval int) {
 		}
 		s.mutex.Unlock()
 	}
+}
+
+// deleteSession 移除Session
+func (s *sessionSource) deleteSession(sessionID int64) {
+	s.mutex.Lock()
+	delete(s.source, sessionID)
+	s.mutex.Unlock()
 }

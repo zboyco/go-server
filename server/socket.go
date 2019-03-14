@@ -147,7 +147,7 @@ func (server *Server) handleClient(session *AppSession) {
 	}
 
 	// 注册Session
-	server.sessionSource.list <- session
+	server.sessionSource.addSession(session)
 
 	// 创建scanner
 	scanner := bufio.NewScanner(session.conn)
@@ -190,7 +190,5 @@ func (server *Server) closeSession(session *AppSession, reason string) {
 	session.Close(reason)
 
 	// 从池中移除
-	server.sessionSource.mutex.Lock()
-	delete(server.sessionSource.source, session.ID)
-	server.sessionSource.mutex.Unlock()
+	server.sessionSource.deleteSession(session.ID)
 }
