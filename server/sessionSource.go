@@ -7,9 +7,9 @@ import (
 )
 
 type sessionSource struct {
-	source map[int64]*AppSession // Seesion池
-	list   chan *AppSession      // 注册Session的通道
-	mutex  sync.Mutex            // 锁
+	source     map[int64]*AppSession // Seesion池
+	list       chan *AppSession      // 注册Session的通道
+	sync.Mutex                       // 锁
 }
 
 // addSession 添加session到池中
@@ -27,9 +27,9 @@ func (s *sessionSource) registerSession() {
 			return
 		}
 		// 加入池
-		s.mutex.Lock()
+		s.Lock()
 		s.source[session.ID] = session
-		s.mutex.Unlock()
+		s.Unlock()
 	}
 }
 
@@ -45,7 +45,7 @@ func (s *sessionSource) clearTimeoutSession(timeoutSecond int, interval int) {
 		time.Sleep(time.Duration(interval) * time.Second)
 
 		currentTime = time.Now()
-		s.mutex.Lock()
+		s.Lock()
 		{
 			for key, session := range s.source {
 				if session.activeDateTime.Add(time.Duration(timeoutSecond) * time.Second).Before(currentTime) {
@@ -54,13 +54,13 @@ func (s *sessionSource) clearTimeoutSession(timeoutSecond int, interval int) {
 				}
 			}
 		}
-		s.mutex.Unlock()
+		s.Unlock()
 	}
 }
 
 // deleteSession 移除Session
 func (s *sessionSource) deleteSession(sessionID int64) {
-	s.mutex.Lock()
+	s.Lock()
 	delete(s.source, sessionID)
-	s.mutex.Unlock()
+	s.Unlock()
 }
