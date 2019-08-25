@@ -16,7 +16,7 @@ type Server struct {
 	ip                       string         // 服务器IP
 	port                     int            // 服务器端口
 	clientCounter            int64          // 计数器
-	sessionSource            *sessionSource // Seesion池
+	sessionSource            *sessionSource // Session池
 	idleSessionTimeOut       int            // 客户端空闲超时时间
 	clearIdleSessionInterval int            // 清空空闲会话的时间间隔,为0则不清理
 
