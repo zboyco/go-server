@@ -1,17 +1,39 @@
 package server_test
 
 import (
+	"bytes"
 	"encoding/binary"
+	"errors"
+	"fmt"
+	"github.com/zboyco/go-server/server"
+	"log"
 	"net"
+	"sync"
 	"testing"
 	"time"
-
-	"github.com/zboyco/go-server/server"
 )
 
 func init() {
 	go func() {
-		mainServer := server.New("127.0.0.1", 9043, 10, 6)
+		mainServer := server.New("", 9043, 10, 6)
+
+		//根据协议定义分离规则
+		mainServer.SplitFunc = func(data []byte, atEOF bool) (int, []byte, error) {
+			if atEOF {
+				return 0, nil, errors.New("EOF")
+			}
+			if data[0] != '$' || data[3] != '#' {
+				return 0, nil, errors.New("数据异常")
+			}
+			if len(data) > 4 {
+				length := uint16(0)
+				binary.Read(bytes.NewReader(data[1:3]), binary.BigEndian, &length)
+				if int(length)+4 <= len(data) {
+					return int(length) + 4, data[4 : int(length)+4], nil
+				}
+			}
+			return 0, nil, nil
+		}
 
 		mainServer.OnMessage = onMessage
 
@@ -22,46 +44,56 @@ func init() {
 }
 
 func TestSocket(t *testing.T) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:9043")
-	if err != nil {
-		t.Fatalf("Fatal error: %s", err.Error())
+	var wg sync.WaitGroup
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			tcpAddr, err := net.ResolveTCPAddr("tcp4", ":9043")
+			if err != nil {
+				t.Fatalf("Fatal error: %s", err.Error())
+			}
+			conn, err := net.DialTCP("tcp", nil, tcpAddr)
+			if err != nil {
+				t.Fatalf("Fatal error: %s", err.Error())
+			}
+			defer conn.Close()
+
+			var headSize int
+			var headBytes = make([]byte, 4)
+			headBytes[0] = '$'
+			headBytes[3] = '#'
+
+			s := fmt.Sprintf("hello world - %v", i)
+			content := []byte(s)
+			headSize = len(content)
+			binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
+			conn.Write(headBytes)
+			conn.Write(content)
+
+			s = fmt.Sprintf("hello golang - %v", i)
+			content = []byte(s)
+			headSize = len(content)
+			binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
+			conn.Write(headBytes)
+			conn.Write(content)
+
+			s = fmt.Sprintf("hello socket - %v", i)
+			content = []byte(s)
+			headSize = len(content)
+			binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
+			conn.Write(headBytes)
+			conn.Write(content)
+		}(i)
 	}
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	if err != nil {
-		t.Fatalf("Fatal error: %s", err.Error())
-	}
-	defer conn.Close()
-
-	var headSize int
-	var headBytes = make([]byte, 4)
-	headBytes[0] = '$'
-	headBytes[3] = '#'
-	s := "hello world"
-	content := []byte(s)
-	headSize = len(content)
-	binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
-	conn.Write(headBytes)
-	conn.Write(content)
-
-	s = "hello go"
-	content = []byte(s)
-	headSize = len(content)
-	binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
-	conn.Write(headBytes)
-	conn.Write(content)
-
-	s = "hello tcp"
-	content = []byte(s)
-	headSize = len(content)
-	binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
-	conn.Write(headBytes)
-	conn.Write(content)
-	time.Sleep(time.Second * 3)
+	wg.Wait()
+	time.Sleep(3 * time.Second)
 }
 
 func BenchmarkSocket(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:9043")
+		tcpAddr, err := net.ResolveTCPAddr("tcp4", ":9043")
 		if err != nil {
 			b.Fatalf("Fatal error: %s", err.Error())
 		}
@@ -75,21 +107,22 @@ func BenchmarkSocket(b *testing.B) {
 		var headBytes = make([]byte, 4)
 		headBytes[0] = '$'
 		headBytes[3] = '#'
-		s := "hello world"
+
+		s := fmt.Sprintf("hello world - %v", i)
 		content := []byte(s)
 		headSize = len(content)
 		binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
 		conn.Write(headBytes)
 		conn.Write(content)
 
-		s = "hello go"
+		s = fmt.Sprintf("hello golang - %v", i)
 		content = []byte(s)
 		headSize = len(content)
 		binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
 		conn.Write(headBytes)
 		conn.Write(content)
 
-		s = "hello tcp"
+		s = fmt.Sprintf("hello socket - %v", i)
 		content = []byte(s)
 		headSize = len(content)
 		binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
@@ -101,10 +134,10 @@ func BenchmarkSocket(b *testing.B) {
 // 接收数据方法
 func onMessage(client *server.AppSession, bytes []byte) {
 	//将bytes转为字符串
-	//result := string(bytes)
+	result := string(bytes)
 
 	//输出结果
-	//log.Println("接收到客户[", client.ID, "]数据:", result)
+	log.Println("接收到客户端[", client.ID, "]数据:", result)
 
 	// client.Send([]byte("Got!"))
 }
@@ -112,5 +145,5 @@ func onMessage(client *server.AppSession, bytes []byte) {
 // 接收错误方法
 func onError(err error) {
 	//输出结果
-	//log.Println("错误: ", err)
+	log.Println("错误: ", err)
 }

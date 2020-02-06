@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
+	"errors"
 	"log"
 
 	"github.com/zboyco/go-server/server"
@@ -9,6 +12,24 @@ import (
 func main() {
 
 	mainServer := server.New("127.0.0.1", 9043, 10, 6)
+
+	//根据协议定义分离规则
+	mainServer.SplitFunc = func(data []byte, atEOF bool) (int, []byte, error) {
+		if atEOF {
+			return 0, nil, errors.New("EOF")
+		}
+		if data[0] != '$' || data[3] != '#' {
+			return 0, nil, errors.New("数据异常")
+		}
+		if len(data) > 4 {
+			length := int16(0)
+			binary.Read(bytes.NewReader(data[1:3]), binary.BigEndian, &length)
+			if int(length)+4 <= len(data) {
+				return int(length) + 4, data[4 : int(length)+4], nil
+			}
+		}
+		return 0, nil, nil
+	}
 
 	mainServer.OnMessage = onMessage
 
