@@ -11,7 +11,10 @@ import (
 
 func main() {
 
-	mainServer := server.New("", 9043, 10, 6)
+	mainServer := server.New("", 9043)
+	mainServer.AcceptCount = 10
+	mainServer.IdleSessionTimeOut = 10
+	mainServer.ClearIdleSessionInterval = 6
 
 	//根据协议定义分离规则
 	mainServer.SplitFunc = func(data []byte, atEOF bool) (int, []byte, error) {
@@ -46,7 +49,7 @@ func onMessage(client *server.AppSession, bytes []byte) {
 	//输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
 
-	client.Send([]byte("Got!"))
+	//client.Send([]byte("Got!"))
 }
 
 // 接收错误方法

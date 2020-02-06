@@ -6,16 +6,19 @@ import (
 	uuid "github.com/satori/go.uuid"
 	"log"
 	"net"
+	"sync"
 	"time"
 )
 
 // Server 服务结构
 type Server struct {
-	ip                       string       // 服务器IP
-	port                     int          // 服务器端口
-	sessionSource            *sessionPool // Session池
-	idleSessionTimeOut       int          // 客户端空闲超时时间
-	clearIdleSessionInterval int          // 清空空闲会话的时间间隔,为0则不清理
+	ip            string       // 服务器IP
+	port          int          // 服务器端口
+	sessionSource *sessionPool // Session池
+
+	AcceptCount              int // 用于接收连接请求的协程数量
+	IdleSessionTimeOut       int // 客户端空闲超时时间
+	ClearIdleSessionInterval int // 清空空闲会话的时间间隔,为0则不清理
 
 	SplitFunc            bufio.SplitFunc           // 拆包规则
 	OnError              func(error)               // 错误方法
@@ -25,15 +28,16 @@ type Server struct {
 }
 
 // New 新建一个服务
-func New(ip string, port int, idleSessionTimeOut int, clearIdleSessionInterval int) *Server {
+func New(ip string, port int) *Server {
 	return &Server{
 		ip:   ip,
 		port: port,
 		sessionSource: &sessionPool{
 			list: make(chan *sessionHandle, 100),
 		},
-		idleSessionTimeOut:       idleSessionTimeOut,
-		clearIdleSessionInterval: clearIdleSessionInterval,
+		IdleSessionTimeOut:       300,
+		ClearIdleSessionInterval: 120,
+		AcceptCount:              2,
 	}
 }
 
@@ -70,37 +74,40 @@ func (server *Server) Start() {
 	go server.sessionSource.sessionPoolManager()
 
 	// 开启定时清理Session方法
-	go server.sessionSource.clearTimeoutSession(server.idleSessionTimeOut, server.clearIdleSessionInterval)
+	go server.sessionSource.clearTimeoutSession(server.IdleSessionTimeOut, server.ClearIdleSessionInterval)
 
-	for {
-		log.Println("等待客户端连接...")
-
-		// 开始接收连接
-		conn, err := tcpListener.Accept()
-
-		if err != nil {
-			log.Println("客户端连接失败, ", err)
-			if server.OnError != nil {
-				server.OnError(err)
+	var wg sync.WaitGroup
+	for i := 0; i < server.AcceptCount; i++ {
+		wg.Add(1)
+		go func(acceptIndex int) {
+			defer wg.Done()
+			for {
+				log.Println("等待客户端连接...")
+				// 开始接收连接
+				conn, err := tcpListener.Accept()
+				if err != nil {
+					log.Println("客户端连接失败, ", err)
+					if server.OnError != nil {
+						server.OnError(err)
+					}
+					continue
+				}
+				// 启用goroutine处理
+				go server.handleClient(conn)
 			}
-			continue
-		}
-
-		appSession := &AppSession{
-			conn:           conn,
-			activeDateTime: time.Now(),
-		}
-
-		// 启用goroutine处理
-		go server.handleClient(appSession)
+		}(i)
 	}
+	wg.Wait()
 }
 
 // handleClient 读取数据
-func (server *Server) handleClient(session *AppSession) {
-	// 生成会话ID
-	session.ID = uuid.Must(uuid.NewV4()).String()
-
+func (server *Server) handleClient(conn net.Conn) {
+	// 创建会话对象
+	session := &AppSession{
+		ID:             uuid.Must(uuid.NewV4()).String(),
+		conn:           conn,
+		activeDateTime: time.Now(),
+	}
 	// 获取连接地址
 	remoteAddr := session.conn.RemoteAddr()
 	log.Println("客户端[", session.ID, "]地址:", remoteAddr)
@@ -134,7 +141,7 @@ func (server *Server) handleClient(session *AppSession) {
 
 // closeSession 关闭session
 func (server *Server) closeSession(session *AppSession, reason string) {
-	session.Close(reason)
+	go session.Close(reason)
 	// 从池中移除
-	server.sessionSource.deleteSession(session)
+	go server.sessionSource.deleteSession(session)
 }

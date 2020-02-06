@@ -70,9 +70,7 @@ func (s *sessionPool) clearTimeoutSession(timeoutSecond int, interval int) {
 				session := value.(*AppSession)
 				if session.activeDateTime.Before(timeoutTime) {
 					// 关闭连接
-					session.Close("超时")
-					// 移出会话池
-					s.deleteSession(session)
+					go session.Close("超时")
 				}
 				return true
 			})
