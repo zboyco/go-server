@@ -22,6 +22,6 @@ func (session *AppSession) Send(buf []byte) {
 
 // Close 关闭连接
 func (session *AppSession) Close(reason string) {
-	session.conn.Close()
 	log.Println("客户端[", session.ID, "]连接已关闭，原因：", reason)
+	session.conn.Close()
 }

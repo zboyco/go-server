@@ -6,35 +6,55 @@ import (
 	"time"
 )
 
-type sessionSource struct {
-	source     map[string]*AppSession // 会话池
-	list       chan *AppSession       // 注册会话的通道
-	sync.Mutex                        // 锁
+type sessionPool struct {
+	source sync.Map            // 会话池
+	list   chan *sessionHandle // 注册会话的通道
+	count  int                 // 计数器
+}
+
+type sessionHandle struct {
+	session *AppSession
+	isAdd   bool
 }
 
 // addSession 添加会话到池中
-func (s *sessionSource) addSession(session *AppSession) {
-	s.list <- session
+func (s *sessionPool) addSession(session *AppSession) {
+	s.list <- &sessionHandle{
+		session,
+		true,
+	}
 }
 
-// registerSession 注册会话
-func (s *sessionSource) registerSession() {
+// deleteSession 移除Session
+func (s *sessionPool) deleteSession(session *AppSession) {
+	s.list <- &sessionHandle{
+		session,
+		false,
+	}
+}
+
+// sessionPoolManager 会话池管理
+func (s *sessionPool) sessionPoolManager() {
 	for {
-		session, ok := <-s.list
+		m, ok := <-s.list
 
 		if !ok {
 			log.Println("Session池通道关闭")
 			return
 		}
 		// 加入池
-		s.Lock()
-		s.source[session.ID] = session
-		s.Unlock()
+		if m.isAdd {
+			s.source.Store(m.session.ID, m.session)
+			s.count++
+		} else {
+			s.source.Delete(m.session.ID)
+			s.count--
+		}
 	}
 }
 
 // clearTimeoutSession 周期性清理闲置会话
-func (s *sessionSource) clearTimeoutSession(timeoutSecond int, interval int) {
+func (s *sessionPool) clearTimeoutSession(timeoutSecond int, interval int) {
 	var timeoutTime time.Time
 
 	if interval == 0 {
@@ -45,29 +65,22 @@ func (s *sessionSource) clearTimeoutSession(timeoutSecond int, interval int) {
 		time.Sleep(time.Duration(interval) * time.Second)
 
 		timeoutTime = time.Now().Add(-time.Duration(timeoutSecond) * time.Second)
-		s.Lock()
 		{
-			for key, session := range s.source {
+			s.source.Range(func(key, value interface{}) bool {
+				session := value.(*AppSession)
 				if session.activeDateTime.Before(timeoutTime) {
 					// 关闭连接
 					session.Close("超时")
 					// 移出会话池
-					delete(s.source, key)
+					s.deleteSession(session)
 				}
-			}
+				return true
+			})
 		}
-		s.Unlock()
 	}
 }
 
-// deleteSession 移除Session
-func (s *sessionSource) deleteSession(sessionID string) {
-	s.Lock()
-	defer s.Unlock()
-	delete(s.source, sessionID)
-}
-
 // Count 返回会话池数量
-func (s *sessionSource) Count() int {
-	return len(s.source)
+func (s *sessionPool) Count() int {
+	return s.count
 }

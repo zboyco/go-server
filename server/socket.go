@@ -11,11 +11,11 @@ import (
 
 // Server 服务结构
 type Server struct {
-	ip                       string         // 服务器IP
-	port                     int            // 服务器端口
-	sessionSource            *sessionSource // Session池
-	idleSessionTimeOut       int            // 客户端空闲超时时间
-	clearIdleSessionInterval int            // 清空空闲会话的时间间隔,为0则不清理
+	ip                       string       // 服务器IP
+	port                     int          // 服务器端口
+	sessionSource            *sessionPool // Session池
+	idleSessionTimeOut       int          // 客户端空闲超时时间
+	clearIdleSessionInterval int          // 清空空闲会话的时间间隔,为0则不清理
 
 	SplitFunc            bufio.SplitFunc           // 拆包规则
 	OnError              func(error)               // 错误方法
@@ -29,9 +29,8 @@ func New(ip string, port int, idleSessionTimeOut int, clearIdleSessionInterval i
 	return &Server{
 		ip:   ip,
 		port: port,
-		sessionSource: &sessionSource{
-			source: make(map[string]*AppSession),
-			list:   make(chan *AppSession, 100),
+		sessionSource: &sessionPool{
+			list: make(chan *sessionHandle, 100),
 		},
 		idleSessionTimeOut:       idleSessionTimeOut,
 		clearIdleSessionInterval: clearIdleSessionInterval,
@@ -67,8 +66,8 @@ func (server *Server) Start() {
 	// 程序返回后关闭socket
 	defer tcpListener.Close()
 
-	// 开启Session注册
-	go server.sessionSource.registerSession()
+	// 开启会话池管理
+	go server.sessionSource.sessionPoolManager()
 
 	// 开启定时清理Session方法
 	go server.sessionSource.clearTimeoutSession(server.idleSessionTimeOut, server.clearIdleSessionInterval)
@@ -122,6 +121,8 @@ func (server *Server) handleClient(session *AppSession) {
 
 	// 获取数据
 	for scanner.Scan() {
+		//更新最后活跃时间
+		session.activeDateTime = time.Now()
 		server.OnMessage(session, scanner.Bytes())
 	}
 
@@ -135,5 +136,5 @@ func (server *Server) handleClient(session *AppSession) {
 func (server *Server) closeSession(session *AppSession, reason string) {
 	session.Close(reason)
 	// 从池中移除
-	server.sessionSource.deleteSession(session.ID)
+	server.sessionSource.deleteSession(session)
 }
