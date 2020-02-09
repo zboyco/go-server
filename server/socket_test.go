@@ -17,7 +17,6 @@ func init() {
 	go func() {
 		mainServer := server.New("", 9043)
 		mainServer.IdleSessionTimeOut = 10
-		mainServer.ClearIdleSessionInterval = 6
 
 		//根据协议定义分离规则
 		mainServer.SplitFunc = func(data []byte, atEOF bool) (int, []byte, error) {

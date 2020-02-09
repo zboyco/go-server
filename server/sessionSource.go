@@ -3,7 +3,6 @@ package server
 import (
 	"log"
 	"sync"
-	"time"
 )
 
 type sessionPool struct {
@@ -49,31 +48,6 @@ func (s *sessionPool) sessionPoolManager() {
 		} else {
 			s.source.Delete(m.session.ID)
 			s.count--
-		}
-	}
-}
-
-// clearTimeoutSession 周期性清理闲置会话
-func (s *sessionPool) clearTimeoutSession(timeoutSecond int, interval int) {
-	var timeoutTime time.Time
-
-	if interval == 0 {
-		return
-	}
-
-	for {
-		time.Sleep(time.Duration(interval) * time.Second)
-
-		timeoutTime = time.Now().Add(-time.Duration(timeoutSecond) * time.Second)
-		{
-			s.source.Range(func(key, value interface{}) bool {
-				session := value.(*AppSession)
-				if session.activeDateTime.Before(timeoutTime) {
-					// 关闭连接
-					go session.Close("超时")
-				}
-				return true
-			})
 		}
 	}
 }
