@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"github.com/zboyco/go-server"
 	"log"
-
-	"github.com/zboyco/go-server/server"
 )
 
 func main() {
 
-	mainServer := server.New("", 9043)
+	mainServer := go_server.New("", 9043)
 	mainServer.AcceptCount = 10
 	mainServer.IdleSessionTimeOut = 10
 
@@ -41,7 +40,7 @@ func main() {
 }
 
 // 接收数据方法
-func onMessage(client *server.AppSession, bytes []byte) {
+func onMessage(client *go_server.AppSession, bytes []byte) {
 	//将bytes转为字符串
 	result := string(bytes)
 

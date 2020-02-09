@@ -1,4 +1,4 @@
-package server
+package go_server
 
 import (
 	"log"

@@ -1,11 +1,11 @@
-package server_test
+package go_server_test
 
 import (
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/zboyco/go-server/server"
+	"github.com/zboyco/go-server"
 	"log"
 	"net"
 	"sync"
@@ -15,7 +15,7 @@ import (
 
 func init() {
 	go func() {
-		mainServer := server.New("", 9043)
+		mainServer := go_server.New("", 9043)
 		mainServer.IdleSessionTimeOut = 10
 
 		//根据协议定义分离规则
@@ -133,7 +133,7 @@ func BenchmarkSocket(b *testing.B) {
 }
 
 // 接收数据方法
-func onMessage(client *server.AppSession, bytes []byte) {
+func onMessage(client *go_server.AppSession, bytes []byte) {
 	//将bytes转为字符串
 	result := string(bytes)
 
