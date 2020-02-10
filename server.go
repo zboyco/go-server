@@ -25,6 +25,8 @@ type Server struct {
 	OnMessage            func(*AppSession, []byte) // 接收到新消息
 	OnNewSessionRegister func(*AppSession)         // 新客户端接入
 	OnSessionClosed      func(*AppSession, string) // 客户端关闭通知
+
+	actions map[string]func(*AppSession, []byte) // 消息处理方法字典
 }
 
 // New 新建一个服务
