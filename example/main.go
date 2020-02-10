@@ -32,7 +32,12 @@ func main() {
 		return 0, nil, nil
 	}
 
-	mainServer.OnMessage = onMessage
+	err := mainServer.RegisterAction(&module{})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	//mainServer.OnMessage = onMessage
 
 	mainServer.OnError = onError
 
@@ -40,9 +45,9 @@ func main() {
 }
 
 // 接收数据方法
-func onMessage(client *go_server.AppSession, bytes []byte) {
+func onMessage(client *go_server.AppSession, token []byte) {
 	//将bytes转为字符串
-	result := string(bytes)
+	result := string(token)
 
 	//输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
@@ -54,4 +59,21 @@ func onMessage(client *go_server.AppSession, bytes []byte) {
 func onError(err error) {
 	//输出结果
 	log.Println("错误: ", err)
+}
+
+type module struct {
+}
+
+func (m *module) ReturnPath() string {
+	return ""
+}
+
+func (m *module) Say(client *go_server.AppSession, token []byte) {
+	//将bytes转为字符串
+	result := string(token)
+
+	//输出结果
+	log.Println("接收到客户[", client.ID, "]数据:", result)
+
+	client.Send([]byte("Got!"))
 }

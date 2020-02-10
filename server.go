@@ -39,6 +39,7 @@ func New(ip string, port int) *Server {
 		},
 		IdleSessionTimeOut: 300,
 		AcceptCount:        2,
+		actions:            make(map[string]func(*AppSession, []byte)),
 	}
 }
 
