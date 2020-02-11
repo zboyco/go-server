@@ -6,10 +6,12 @@ import (
 	"reflect"
 )
 
+// Action 方法处理模块
 type Action interface {
 	ReturnRootPath() string // 返回当前模块根路径
 }
 
+// RegisterAction 注册方法处理模块
 func (server *Server) RegisterAction(m Action) error {
 	mType := reflect.TypeOf(m)
 	mValue := reflect.ValueOf(m)
@@ -32,6 +34,7 @@ func (server *Server) RegisterAction(m Action) error {
 	return nil
 }
 
+// hookAction 调用action
 func (server *Server) hookAction(funcName string, session *AppSession, token []byte) error {
 	if _, exist := server.actions[funcName]; !exist {
 		return errors.New("action not exist")

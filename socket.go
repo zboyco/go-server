@@ -7,12 +7,15 @@ import (
 	"errors"
 )
 
+// ResolveActionFunc 解析数据返回actionName和message
 type ResolveActionFunc func(token []byte) (actionName string, msg []byte, err error)
+// ReceiveFilter 过滤器接口
 type ReceiveFilter interface {
 	SplitFunc() bufio.SplitFunc
 	ResolveAction() ResolveActionFunc
 }
 
+// SetReceiveFilter 设置过滤器
 func (server *Server) SetReceiveFilter(s ReceiveFilter) {
 	server.splitFunc = s.SplitFunc()
 	server.resolveAction = s.ResolveAction()
@@ -26,6 +29,7 @@ type BeginEndMarkReceiveFilter struct {
 	End   []byte
 }
 
+// SplitFunc 返回拆包函数
 func (s *BeginEndMarkReceiveFilter) SplitFunc() bufio.SplitFunc {
 	return func(data []byte, atEOF bool) (int, []byte, error) {
 		if atEOF {
@@ -48,6 +52,8 @@ func (s *BeginEndMarkReceiveFilter) SplitFunc() bufio.SplitFunc {
 		return packageLength + beginLength + len(s.End), data[beginLength : beginLength+packageLength], nil
 	}
 }
+
+// ResolveAction 返回解析函数
 func (s *BeginEndMarkReceiveFilter) ResolveAction() ResolveActionFunc {
 	return func(token []byte) (actionName string, msg []byte, err error) {
 		actionNameLength := uint32(0)
@@ -69,6 +75,7 @@ func (s *BeginEndMarkReceiveFilter) ResolveAction() ResolveActionFunc {
 type FixedHeaderReceiveFilter struct {
 }
 
+// SplitFunc 返回拆包函数
 func (s *FixedHeaderReceiveFilter) SplitFunc() bufio.SplitFunc {
 	return func(data []byte, atEOF bool) (int, []byte, error) {
 		if atEOF {
@@ -88,6 +95,7 @@ func (s *FixedHeaderReceiveFilter) SplitFunc() bufio.SplitFunc {
 	}
 }
 
+// ResolveAction 返回解析函数
 func (s *FixedHeaderReceiveFilter) ResolveAction() ResolveActionFunc {
 	return func(token []byte) (actionName string, msg []byte, err error) {
 		actionNameLength := uint32(0)

@@ -192,18 +192,22 @@ func (server *Server) SetSplitFunc(splitFunc bufio.SplitFunc) {
 	server.splitFunc = splitFunc
 }
 
+// SetOnMessage 设置接收到新消息处理方法
 func (server *Server) SetOnMessage(onMessageFunc func(*AppSession, []byte)) {
 	server.onMessage = onMessageFunc
 }
 
+// SetOnError 设置接收到错误处理方法
 func (server *Server) SetOnError(onErrorFunc func(error)) {
 	server.onError = onErrorFunc
 }
 
+// SetOnNewSessionRegister 设置新会话加入时处理方法
 func (server *Server) SetOnNewSessionRegister(onNewSessionRegisterFunc func(*AppSession)) {
 	server.onNewSessionRegister = onNewSessionRegisterFunc
 }
 
+// SetOnSessionClosed 设置会话关闭时处理方法
 func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(*AppSession, string)) {
 	server.onSessionClosed = onSessionClosedFunc
 }

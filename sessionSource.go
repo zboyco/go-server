@@ -5,15 +5,17 @@ import (
 	"sync"
 )
 
+// sessionPool 会话管理池
 type sessionPool struct {
 	source sync.Map            // 会话池
 	list   chan *sessionHandle // 注册会话的通道
 	count  int                 // 计数器
 }
 
+// sessionHandle 会话管理操作
 type sessionHandle struct {
-	session *AppSession
-	isAdd   bool
+	session *AppSession // 会话
+	isAdd   bool        // 是否添加到池，false为从池中移除
 }
 
 // addSession 添加会话到池中
