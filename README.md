@@ -37,4 +37,8 @@
     修改`New`方法，将超时相关设置修改为参数设置  
 15. 修改闲置超时处理方式  
     > 采用`net.Conn`自带的`deadline`方式设置超时(主要是小白，以前不知道有这个)  
-16. 实现路由
+16. 实现普通拆包和路由两种方式  
+    > 1. 通过`SetSplitFunc`和`SetOnMessage`两个方法实现普通socket协议  
+    > 2. 通过`SetReceiveFilter`和`RegisterAction`实现类RPC协议  
+    > - 默认实现了`标记数据包开始和结尾字节`和`固定头部协议`两种过滤器，亦可以通过实现`ReceiveFilter`接口来自定义过滤器  
+    > - 使用方法参考`example`  

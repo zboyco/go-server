@@ -29,15 +29,22 @@ func main() {
 	//	return 0, nil, nil
 	//})
 
-	mainServer.SetReceiveFilter(&go_server.BeginEndMarkReceiveFilter{
-		Begin: []byte{'!', '$'},
-		End:   []byte{'$', '!'},
-	})
+	//mainServer.SetReceiveFilter(&go_server.BeginEndMarkReceiveFilter{
+	//	Begin: []byte{'!', '$'},
+	//	End:   []byte{'$', '!'},
+	//})
 
-	//err := mainServer.RegisterAction(&module{})
-	//if err != nil {
-	//	log.Panic(err)
-	//}
+	mainServer.SetReceiveFilter(&go_server.FixedHeaderReceiveFilter{})
+
+	err := mainServer.RegisterAction(&module{})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	err = mainServer.RegisterAction(&otherModule{})
+	if err != nil {
+		log.Panic(err)
+	}
 
 	//mainServer.SetOnMessage(onMessage)
 
@@ -66,7 +73,7 @@ func onError(err error) {
 type module struct {
 }
 
-func (m *module) ReturnPath() string {
+func (m *module) ReturnRootPath() string {
 	return ""
 }
 
@@ -76,6 +83,23 @@ func (m *module) Say(client *go_server.AppSession, token []byte) {
 
 	//输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
+
+	client.Send([]byte("Got!"))
+}
+
+type otherModule struct {
+}
+
+func (m *otherModule) ReturnRootPath() string {
+	return "v2"
+}
+
+func (m *otherModule) Print(client *go_server.AppSession, token []byte) {
+	//将bytes转为字符串
+	result := string(token)
+
+	//输出结果
+	log.Println("Print接收到客户[", client.ID, "]数据:", result)
 
 	client.Send([]byte("Got!"))
 }

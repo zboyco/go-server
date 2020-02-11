@@ -19,7 +19,7 @@ func init() {
 		mainServer.IdleSessionTimeOut = 10
 
 		//根据协议定义分离规则
-		mainServer.SplitFunc = func(data []byte, atEOF bool) (int, []byte, error) {
+		mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
 			if atEOF {
 				return 0, nil, errors.New("EOF")
 			}
@@ -34,11 +34,11 @@ func init() {
 				}
 			}
 			return 0, nil, nil
-		}
+		})
 
-		mainServer.OnMessage = onMessage
+		mainServer.SetOnMessage(onMessage)
 
-		mainServer.OnError = onError
+		mainServer.SetOnError(onError)
 
 		mainServer.Start()
 	}()

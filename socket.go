@@ -8,12 +8,12 @@ import (
 )
 
 type ResolveActionFunc func(token []byte) (actionName string, msg []byte, err error)
-type receiveFilter interface {
+type ReceiveFilter interface {
 	SplitFunc() bufio.SplitFunc
 	ResolveAction() ResolveActionFunc
 }
 
-func (server *Server) SetReceiveFilter(s receiveFilter) {
+func (server *Server) SetReceiveFilter(s ReceiveFilter) {
 	server.splitFunc = s.SplitFunc()
 	server.resolveAction = s.ResolveAction()
 }
@@ -67,8 +67,6 @@ func (s *BeginEndMarkReceiveFilter) ResolveAction() ResolveActionFunc {
 // 5-8位代表ActionName长度
 // 剩余为 ActionName字符串 + 数据Body
 type FixedHeaderReceiveFilter struct {
-	PackageLength    int
-	ActionNameLength int
 }
 
 func (s *FixedHeaderReceiveFilter) SplitFunc() bufio.SplitFunc {

@@ -6,15 +6,15 @@ import (
 	"reflect"
 )
 
-type action interface {
-	ReturnPath() string
+type Action interface {
+	ReturnRootPath() string // 返回当前模块根路径
 }
 
-func (server *Server) RegisterAction(m action) error {
+func (server *Server) RegisterAction(m Action) error {
 	mType := reflect.TypeOf(m)
 	mValue := reflect.ValueOf(m)
 
-	prefix := m.ReturnPath()
+	prefix := m.ReturnRootPath()
 	if prefix != "" {
 		prefix = "/" + prefix
 	}
@@ -24,7 +24,7 @@ func (server *Server) RegisterAction(m action) error {
 		if temFunc, ok := tem.(func(*AppSession, []byte)); ok {
 			funcName := fmt.Sprintf("%s/%s", prefix, mType.Method(i).Name)
 			if _, exist := server.actions[funcName]; exist {
-				return errors.New("action already exist")
+				return errors.New(fmt.Sprintf("action %s already exist", funcName))
 			}
 			server.actions[funcName] = temFunc
 		}
