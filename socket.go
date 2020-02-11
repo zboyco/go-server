@@ -7,79 +7,98 @@ import (
 	"errors"
 )
 
-type receiveSplit interface {
+type ResolveActionFunc func(token []byte) (actionName string, msg []byte, err error)
+type receiveFilter interface {
 	SplitFunc() bufio.SplitFunc
-	ResolveAction(token []byte) (actionName string, msg []byte)
+	ResolveAction() ResolveActionFunc
 }
 
-func (server *Server) SetReceiveSplit(s receiveSplit) {
-
+func (server *Server) SetReceiveFilter(s receiveFilter) {
+	server.splitFunc = s.SplitFunc()
+	server.resolveAction = s.ResolveAction()
 }
 
-type BeginEndMarkReceiveSplit struct {
-	Begin string
-	End   string
+// BeginEndMarkReceiveFilter 标记数据包开始和结尾字节
+// 数据包以Begin开始，End结尾
+// 中间部分为 ActionName字符串 + 数据Body
+type BeginEndMarkReceiveFilter struct {
+	Begin []byte
+	End   []byte
 }
 
-func (s *BeginEndMarkReceiveSplit) SplitFunc() bufio.SplitFunc {
+func (s *BeginEndMarkReceiveFilter) SplitFunc() bufio.SplitFunc {
 	return func(data []byte, atEOF bool) (int, []byte, error) {
 		if atEOF {
 			return 0, nil, errors.New("EOF")
 		}
-		if data[0] != '$' || data[3] != '#' {
+		start, end := 0, 0
+		if start = bytes.Index(data, s.Begin); start < 0 {
+			// We have a full newline-terminated line.
+			return 0, nil, nil
+		}
+		if end = bytes.Index(data, s.End); end < 0 {
+			// We have a full newline-terminated line.
+			return 0, nil, nil
+		}
+		if start > end {
 			return 0, nil, errors.New("数据异常")
 		}
-		if len(data) > 4 {
-			length := int16(0)
-			binary.Read(bytes.NewReader(data[1:3]), binary.BigEndian, &length)
-			if int(length)+4 <= len(data) {
-				return int(length) + 4, data[4 : int(length)+4], nil
-			}
+		beginLength := len(s.Begin)
+		packageLength := end - start - beginLength
+		return packageLength + beginLength + len(s.End), data[beginLength : beginLength+packageLength], nil
+	}
+}
+func (s *BeginEndMarkReceiveFilter) ResolveAction() ResolveActionFunc {
+	return func(token []byte) (actionName string, msg []byte, err error) {
+		actionNameLength := uint32(0)
+		err = binary.Read(bytes.NewReader(token[0:4]), binary.BigEndian, &actionNameLength)
+		if err != nil {
+			return
 		}
-		return 0, nil, nil
+		actionName = string(token[4 : 4+actionNameLength])
+		msg = token[4+actionNameLength:]
+		return
 	}
 }
 
-func (s *BeginEndMarkReceiveSplit) ResolveAction(token []byte) (actionName string, msg []byte) {
-	return "", nil
-}
-
-// FixedHeaderReceiveSplit 固定头部协议
+// FixedHeaderReceiveFilter 固定头部协议
 // 头部占用8个字节
-// 1-4位代表数据Body长度
+// 1-4位代表数据包总长度
 // 5-8位代表ActionName长度
-// 剩余为数据Body
-type FixedHeaderReceiveSplit struct {
+// 剩余为 ActionName字符串 + 数据Body
+type FixedHeaderReceiveFilter struct {
 	PackageLength    int
 	ActionNameLength int
 }
 
-func (s *FixedHeaderReceiveSplit) SplitFunc() bufio.SplitFunc {
+func (s *FixedHeaderReceiveFilter) SplitFunc() bufio.SplitFunc {
 	return func(data []byte, atEOF bool) (int, []byte, error) {
 		if atEOF {
 			return 0, nil, errors.New("EOF")
 		}
 		if len(data) > 4 {
-			packageLength := 0
+			packageLength := uint32(0)
 			err := binary.Read(bytes.NewReader(data[0:4]), binary.BigEndian, &packageLength)
 			if err != nil {
 				return 0, nil, err
 			}
-			if packageLength <= len(data) {
-				return packageLength, data[:packageLength], nil
+			if int(packageLength) <= len(data) {
+				return int(packageLength), data[:packageLength], nil
 			}
 		}
 		return 0, nil, nil
 	}
 }
 
-func (s *FixedHeaderReceiveSplit) ResolveAction(token []byte) (actionName string, msg []byte, err error) {
-	actionNameLength := 0
-	err = binary.Read(bytes.NewReader(token[4:8]), binary.BigEndian, &actionNameLength)
-	if err != nil {
+func (s *FixedHeaderReceiveFilter) ResolveAction() ResolveActionFunc {
+	return func(token []byte) (actionName string, msg []byte, err error) {
+		actionNameLength := uint32(0)
+		err = binary.Read(bytes.NewReader(token[4:8]), binary.BigEndian, &actionNameLength)
+		if err != nil {
+			return
+		}
+		actionName = string(token[8 : 8+actionNameLength])
+		msg = token[8+actionNameLength:]
 		return
 	}
-	actionName = string(token[8 : 8+actionNameLength])
-	msg = token[8+actionNameLength:]
-	return
 }

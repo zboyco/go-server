@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
-	"errors"
 	"github.com/zboyco/go-server"
 	"log"
 )
@@ -15,31 +12,36 @@ func main() {
 	mainServer.IdleSessionTimeOut = 10
 
 	//根据协议定义分离规则
-	mainServer.SplitFunc = func(data []byte, atEOF bool) (int, []byte, error) {
-		if atEOF {
-			return 0, nil, errors.New("EOF")
-		}
-		if data[0] != '$' || data[3] != '#' {
-			return 0, nil, errors.New("数据异常")
-		}
-		if len(data) > 4 {
-			length := int16(0)
-			binary.Read(bytes.NewReader(data[1:3]), binary.BigEndian, &length)
-			if int(length)+4 <= len(data) {
-				return int(length) + 4, data[4 : int(length)+4], nil
-			}
-		}
-		return 0, nil, nil
-	}
+	//mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
+	//	if atEOF {
+	//		return 0, nil, errors.New("EOF")
+	//	}
+	//	if data[0] != '$' || data[3] != '#' {
+	//		return 0, nil, errors.New("数据异常")
+	//	}
+	//	if len(data) > 4 {
+	//		length := int16(0)
+	//		binary.Read(bytes.NewReader(data[1:3]), binary.BigEndian, &length)
+	//		if int(length)+4 <= len(data) {
+	//			return int(length) + 4, data[4 : int(length)+4], nil
+	//		}
+	//	}
+	//	return 0, nil, nil
+	//})
 
-	err := mainServer.RegisterAction(&module{})
-	if err != nil {
-		log.Panic(err)
-	}
+	mainServer.SetReceiveFilter(&go_server.BeginEndMarkReceiveFilter{
+		Begin: []byte{'!', '$'},
+		End:   []byte{'$', '!'},
+	})
 
-	//mainServer.OnMessage = onMessage
+	//err := mainServer.RegisterAction(&module{})
+	//if err != nil {
+	//	log.Panic(err)
+	//}
 
-	mainServer.OnError = onError
+	//mainServer.SetOnMessage(onMessage)
+
+	mainServer.SetOnError(onError)
 
 	mainServer.Start()
 }

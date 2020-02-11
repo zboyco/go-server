@@ -20,13 +20,14 @@ type Server struct {
 	AcceptCount        int // 用于接收连接请求的协程数量
 	IdleSessionTimeOut int // 客户端空闲超时时间,为0则不清理
 
-	SplitFunc            bufio.SplitFunc           // 拆包规则
-	OnError              func(error)               // 错误方法
-	OnMessage            func(*AppSession, []byte) // 接收到新消息
-	OnNewSessionRegister func(*AppSession)         // 新客户端接入
-	OnSessionClosed      func(*AppSession, string) // 客户端关闭通知
+	onError              func(error)               // 错误方法
+	onMessage            func(*AppSession, []byte) // 接收到新消息
+	onNewSessionRegister func(*AppSession)         // 新客户端接入
+	onSessionClosed      func(*AppSession, string) // 客户端关闭通知
 
-	actions map[string]func(*AppSession, []byte) // 消息处理方法字典
+	splitFunc     bufio.SplitFunc                                               // 拆包规则
+	resolveAction func(token []byte) (actionName string, msg []byte, err error) // 解析请求方法
+	actions       map[string]func(*AppSession, []byte)                          // 消息处理方法字典
 }
 
 // New 新建一个服务
@@ -45,13 +46,13 @@ func New(ip string, port int) *Server {
 
 // Start 开始监听
 func (server *Server) Start() {
-	if server.SplitFunc == nil {
-		log.Println("错误,未找到数据拆包方法!")
+	if server.splitFunc == nil {
+		log.Println("error: no split function")
 		return
 	}
 
-	if server.OnMessage == nil {
-		log.Println("错误,未找到数据处理方法!")
+	if server.onMessage == nil && server.resolveAction == nil {
+		log.Println("error: no message handle function")
 		return
 	}
 
@@ -65,8 +66,8 @@ func (server *Server) Start() {
 
 	if err != nil {
 		log.Println("监听出错, ", err)
-		if server.OnError != nil {
-			server.OnError(err)
+		if server.onError != nil {
+			server.onError(err)
 		}
 		return
 	}
@@ -88,8 +89,8 @@ func (server *Server) Start() {
 				conn, err := tcpListener.Accept()
 				if err != nil {
 					log.Println("客户端连接失败, ", err)
-					if server.OnError != nil {
-						server.OnError(err)
+					if server.onError != nil {
+						server.onError(err)
 					}
 					continue
 				}
@@ -113,8 +114,8 @@ func (server *Server) handleClient(conn net.Conn) {
 	log.Println("客户端[", session.ID, "]地址:", remoteAddr)
 
 	// 新客户端接入通知
-	if server.OnNewSessionRegister != nil {
-		server.OnNewSessionRegister(session)
+	if server.onNewSessionRegister != nil {
+		server.onNewSessionRegister(session)
 	}
 
 	// 注册Session
@@ -124,7 +125,7 @@ func (server *Server) handleClient(conn net.Conn) {
 	scanner := bufio.NewScanner(session.conn)
 
 	// 设置分离函数
-	scanner.Split(server.SplitFunc)
+	scanner.Split(server.splitFunc)
 
 	// 设置闲置超时时间
 	if server.IdleSessionTimeOut > 0 {
@@ -134,20 +135,47 @@ func (server *Server) handleClient(conn net.Conn) {
 		}
 	}
 
+	var err error
 	// 获取数据
 	for scanner.Scan() {
 		// 设置闲置超时时间
 		if server.IdleSessionTimeOut > 0 {
-			err := session.conn.SetReadDeadline(time.Now().Add(server.idleSessionTimeOutDuration))
+			err = session.conn.SetReadDeadline(time.Now().Add(server.idleSessionTimeOutDuration))
 			if err != nil {
 				log.Println(err)
+				if server.onError != nil {
+					server.onError(err)
+				}
+				break
 			}
 		}
-		server.OnMessage(session, scanner.Bytes())
+		if server.resolveAction != nil {
+			actionName, msg, resolveErr := server.resolveAction(scanner.Bytes())
+			if resolveErr != nil {
+				log.Println(resolveErr)
+				if server.onError != nil {
+					server.onError(resolveErr)
+				}
+				err = resolveErr
+				break
+			}
+			hookErr := server.hookAction(actionName, session, msg)
+			if hookErr != nil {
+				log.Println(hookErr)
+				if server.onError != nil {
+					server.onError(hookErr)
+				}
+			}
+		} else {
+			server.onMessage(session, scanner.Bytes())
+		}
 	}
 
 	// 错误处理
-	if err := scanner.Err(); err != nil {
+	if err == nil {
+		err = scanner.Err()
+	}
+	if err != nil {
 		server.closeSession(session, err.Error())
 	}
 }
@@ -157,4 +185,25 @@ func (server *Server) closeSession(session *AppSession, reason string) {
 	go session.Close(reason)
 	// 从池中移除
 	go server.sessionSource.deleteSession(session)
+}
+
+// SetSplitFunc 设置数据拆包方法
+func (server *Server) SetSplitFunc(splitFunc bufio.SplitFunc) {
+	server.splitFunc = splitFunc
+}
+
+func (server *Server) SetOnMessage(onMessageFunc func(*AppSession, []byte)) {
+	server.onMessage = onMessageFunc
+}
+
+func (server *Server) SetOnError(onErrorFunc func(error)) {
+	server.onError = onErrorFunc
+}
+
+func (server *Server) SetOnNewSessionRegister(onNewSessionRegisterFunc func(*AppSession)) {
+	server.onNewSessionRegister = onNewSessionRegisterFunc
+}
+
+func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(*AppSession, string)) {
+	server.onSessionClosed = onSessionClosedFunc
 }

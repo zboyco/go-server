@@ -16,13 +16,13 @@ func (server *Server) RegisterAction(m action) error {
 
 	prefix := m.ReturnPath()
 	if prefix != "" {
-		prefix += "/"
+		prefix = "/" + prefix
 	}
 
 	for i := 0; i < mType.NumMethod(); i++ {
 		tem := mValue.Method(i).Interface()
 		if temFunc, ok := tem.(func(*AppSession, []byte)); ok {
-			funcName := fmt.Sprintf("%s%s", prefix, mType.Method(i).Name)
+			funcName := fmt.Sprintf("%s/%s", prefix, mType.Method(i).Name)
 			if _, exist := server.actions[funcName]; exist {
 				return errors.New("action already exist")
 			}
@@ -32,7 +32,7 @@ func (server *Server) RegisterAction(m action) error {
 	return nil
 }
 
-func (server *Server) HookAction(funcName string, session *AppSession, token []byte) error {
+func (server *Server) hookAction(funcName string, session *AppSession, token []byte) error {
 	if _, exist := server.actions[funcName]; !exist {
 		return errors.New("action not exist")
 	}
