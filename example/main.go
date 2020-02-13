@@ -8,12 +8,14 @@ import (
 )
 
 func main() {
-
+	// 新建服务
 	mainServer := goserver.New("", 9043)
+	// 设置Socket接收协程数量
 	mainServer.AcceptCount = 10
+	// 设置会话闲置超时时间，为0则不超时
 	mainServer.IdleSessionTimeOut = 10
 
-	//根据协议定义分离规则
+	// 根据协议定义拆包规则
 	//mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
 	//	if atEOF {
 	//		return 0, nil, errors.New("EOF")
@@ -48,8 +50,9 @@ func main() {
 		log.Panic(err)
 	}
 
+	// 注册OnMessage事件
 	//mainServer.SetOnMessage(onMessage)
-
+	// 注册OnError事件
 	mainServer.SetOnError(onError)
 
 	go func() {
@@ -67,18 +70,18 @@ func main() {
 			}
 		}
 	}()
-
+	// 开启服务
 	mainServer.Start()
 }
 
 // 接收数据方法
 func onMessage(client *goserver.AppSession, token []byte) {
-	//将bytes转为字符串
+	// 将bytes转为字符串
 	result := string(token)
 
-	//输出结果
+	// 输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
-
+	// 发送给客户端
 	client.Send([]byte("Got!"))
 }
 

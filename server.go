@@ -41,6 +41,7 @@ func New(ip string, port int) *Server {
 		IdleSessionTimeOut: 300,
 		AcceptCount:        2,
 		actions:            make(map[string]func(*AppSession, []byte)),
+		splitFunc:          bufio.ScanLines,
 	}
 }
 
@@ -66,9 +67,7 @@ func (server *Server) Start() {
 
 	if err != nil {
 		log.Println("监听出错, ", err)
-		if server.onError != nil {
-			server.onError(err)
-		}
+		server.handleOnError(err)
 		return
 	}
 
@@ -89,9 +88,7 @@ func (server *Server) Start() {
 				conn, err := tcpListener.Accept()
 				if err != nil {
 					log.Println("客户端连接失败, ", err)
-					if server.onError != nil {
-						server.onError(err)
-					}
+					server.handleOnError(err)
 					continue
 				}
 				// 启用goroutine处理
@@ -143,29 +140,20 @@ func (server *Server) handleClient(conn net.Conn) {
 		if server.IdleSessionTimeOut > 0 {
 			err = session.conn.SetReadDeadline(time.Now().Add(server.idleSessionTimeOutDuration))
 			if err != nil {
-				log.Println(err)
-				if server.onError != nil {
-					server.onError(err)
-				}
+				server.handleOnError(err)
 				break
 			}
 		}
 		if server.resolveAction != nil {
 			actionName, msg, resolveErr := server.resolveAction(scanner.Bytes())
 			if resolveErr != nil {
-				log.Println(resolveErr)
-				if server.onError != nil {
-					server.onError(resolveErr)
-				}
+				server.handleOnError(resolveErr)
 				err = resolveErr
 				break
 			}
 			hookErr := server.hookAction(actionName, session, msg)
 			if hookErr != nil {
-				log.Println(hookErr)
-				if server.onError != nil {
-					server.onError(hookErr)
-				}
+				server.handleOnError(hookErr)
 			}
 		} else {
 			server.onMessage(session, scanner.Bytes())
@@ -178,6 +166,13 @@ func (server *Server) handleClient(conn net.Conn) {
 	}
 	if err != nil {
 		server.closeSession(session, err.Error())
+	}
+}
+
+func (server *Server) handleOnError(err error) {
+	log.Println(err)
+	if server.onError != nil {
+		server.onError(err)
 	}
 }
 
