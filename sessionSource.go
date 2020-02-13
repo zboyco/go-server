@@ -1,15 +1,16 @@
 package go_server
 
 import (
+	"errors"
 	"log"
 	"sync"
 )
 
 // sessionPool 会话管理池
 type sessionPool struct {
-	source sync.Map            // 会话池
-	list   chan *sessionHandle // 注册会话的通道
-	count  int                 // 计数器
+	pool    sync.Map            // 会话池
+	list    chan *sessionHandle // 注册会话的通道
+	counter int                 // 计数器
 }
 
 // sessionHandle 会话管理操作
@@ -45,16 +46,56 @@ func (s *sessionPool) sessionPoolManager() {
 		}
 		// 加入池
 		if m.isAdd {
-			s.source.Store(m.session.ID, m.session)
-			s.count++
+			s.pool.Store(m.session.ID, m.session)
+			s.counter++
 		} else {
-			s.source.Delete(m.session.ID)
-			s.count--
+			s.pool.Delete(m.session.ID)
+			s.counter--
 		}
 	}
 }
 
-// Count 返回会话池数量
-func (s *sessionPool) Count() int {
-	return s.count
+// 返回会话池数量
+func (s *sessionPool) count() int {
+	return s.counter
+}
+
+// 通过ID获取会话
+func (s *sessionPool) getSessionByID(id string) (*AppSession, error) {
+	if session, ok := s.pool.Load(id); ok {
+		return session.(*AppSession), nil
+	}
+	return nil, errors.New("not found session")
+}
+
+// 通过属性获取会话
+func (s *sessionPool) getSessionByAttr(attr map[string]interface{}) <-chan *AppSession {
+	result := make(chan *AppSession)
+	go func() {
+		defer close(result)
+		s.pool.Range(func(id, sessionInterface interface{}) bool {
+			session := sessionInterface.(*AppSession)
+			for key, value := range attr {
+				if attr, err := session.GetAttr(key); err != nil || attr == value {
+					return true
+				}
+			}
+			result <- session
+			return true
+		})
+	}()
+	return result
+}
+
+// 获取所有会话
+func (s *sessionPool) getAllSessions() <-chan *AppSession {
+	result := make(chan *AppSession)
+	go func() {
+		defer close(result)
+		s.pool.Range(func(key, value interface{}) bool {
+			result <- value.(*AppSession)
+			return true
+		})
+	}()
+	return result
 }

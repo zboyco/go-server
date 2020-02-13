@@ -108,6 +108,7 @@ func (server *Server) handleClient(conn net.Conn) {
 	session := &AppSession{
 		ID:   uuid.Must(uuid.NewV4()).String(),
 		conn: conn,
+		attr: make(map[string]interface{}),
 	}
 	// 获取连接地址
 	remoteAddr := session.conn.RemoteAddr()
@@ -210,4 +211,19 @@ func (server *Server) SetOnNewSessionRegister(onNewSessionRegisterFunc func(*App
 // SetOnSessionClosed 设置会话关闭时处理方法
 func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(*AppSession, string)) {
 	server.onSessionClosed = onSessionClosedFunc
+}
+
+// GetSessionByID 通过ID获取会话
+func (server *Server) GetSessionByID(id string) (*AppSession, error) {
+	return server.sessionSource.getSessionByID(id)
+}
+
+// GetSessionByAttr 通过属性获取会话
+func (server *Server) GetSessionByAttr(attr map[string]interface{}) <-chan *AppSession {
+	return server.sessionSource.getSessionByAttr(attr)
+}
+
+// GetAllSessions 获取所有会话
+func (server *Server) GetAllSessions() <-chan *AppSession {
+	return server.sessionSource.getAllSessions()
 }

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"github.com/zboyco/go-server"
 	"log"
+	"time"
 )
 
 func main() {
@@ -49,6 +51,22 @@ func main() {
 	//mainServer.SetOnMessage(onMessage)
 
 	mainServer.SetOnError(onError)
+
+	go func() {
+		counter := 0
+		for {
+			time.Sleep(10 * time.Second)
+			counter++
+			sessions := mainServer.GetAllSessions()
+			for {
+				session, ok := <-sessions
+				if !ok {
+					break
+				}
+				session.Send([]byte(fmt.Sprintf("server to client [%v]: %v", session.ID, counter)))
+			}
+		}
+	}()
 
 	mainServer.Start()
 }
