@@ -1,4 +1,4 @@
-package go_server_test
+package goserver_test
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 
 func init() {
 	go func() {
-		mainServer := go_server.New("", 9043)
+		mainServer := goserver.New("", 9043)
 		mainServer.IdleSessionTimeOut = 10
 
 		//根据协议定义分离规则
@@ -133,7 +133,7 @@ func BenchmarkSocket(b *testing.B) {
 }
 
 // 接收数据方法
-func onMessage(client *go_server.AppSession, bytes []byte) {
+func onMessage(client *goserver.AppSession, bytes []byte) {
 	//将bytes转为字符串
 	result := string(bytes)
 

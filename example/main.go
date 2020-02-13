@@ -9,7 +9,7 @@ import (
 
 func main() {
 
-	mainServer := go_server.New("", 9043)
+	mainServer := goserver.New("", 9043)
 	mainServer.AcceptCount = 10
 	mainServer.IdleSessionTimeOut = 10
 
@@ -36,7 +36,7 @@ func main() {
 	//	End:   []byte{'$', '!'},
 	//})
 
-	mainServer.SetReceiveFilter(&go_server.FixedHeaderReceiveFilter{})
+	mainServer.SetReceiveFilter(&goserver.FixedHeaderReceiveFilter{})
 
 	err := mainServer.RegisterAction(&module{})
 	if err != nil {
@@ -72,7 +72,7 @@ func main() {
 }
 
 // 接收数据方法
-func onMessage(client *go_server.AppSession, token []byte) {
+func onMessage(client *goserver.AppSession, token []byte) {
 	//将bytes转为字符串
 	result := string(token)
 
@@ -95,7 +95,7 @@ func (m *module) ReturnRootPath() string {
 	return ""
 }
 
-func (m *module) Say(client *go_server.AppSession, token []byte) {
+func (m *module) Say(client *goserver.AppSession, token []byte) {
 	//将bytes转为字符串
 	result := string(token)
 
@@ -112,7 +112,7 @@ func (m *otherModule) ReturnRootPath() string {
 	return "v2"
 }
 
-func (m *otherModule) Print(client *go_server.AppSession, token []byte) {
+func (m *otherModule) Print(client *goserver.AppSession, token []byte) {
 	//将bytes转为字符串
 	result := string(token)
 
