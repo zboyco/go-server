@@ -74,8 +74,7 @@ func onMessage(client *goserver.AppSession, token []byte) {
 `ReceiveFilter`过滤器有两个方法,`splitFunc`负责拆包,`resolveAction`负责将每一个`package`解析成`ActionName`和`Message`两个部分;  
 
 `Action`处理模块负责注册方法到go-server中,供go-server调用;
-> go-server 默认提供了两种常用的过滤器,分别为 `开始结束标记`和`固定头协议` 两种,也可以自定义过滤器,只需要实现`ReceiveFilter`接口即可  
-> 自定义过滤器的方法可以参考[socket.go文件](https://github.com/zboyco/go-server/blob/master/socket.go)  
+> go-server 默认提供了两种常用的过滤器,分别为 `开始结束标记`和`固定头协议` 两种,也可以自定义过滤器,只需要实现`ReceiveFilter`接口即可，自定义过滤器的方法参考[socket.go文件](https://github.com/zboyco/go-server/blob/master/socket.go)    
 > `Action`模块可以注册多个,只要调用`模块根路径(ReturnRootPath)`+`方法名`没有重复即可，如有重复，在注册的时候会返回错误提示。  
 
 下面用一个例子演示命令方式调用:  
