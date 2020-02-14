@@ -5,7 +5,7 @@ go-server 是我在学习golang的过程中，从最简单的socket一步一步�
 
 目前功能如下：  
 1. 普通的tcp功能（废话）  
-2. 使用标准库`bufio.Scanner`实现拆包，可以直接使用`bufio.Scanner`内置的拆包协议  
+2. 使用标准库`bufio.Scanner`实现拆包，可以直接使用`bufio.Scanner`内置的拆包协议，当然也可以自定义拆包协议  
 3. 提供普通`OnMessage`和命令路由两种使用模式  
 4. 采用实现`Action`接口的方式注册路由
 5. 过滤器支持自定义，只需实现`ReceiveFilter`接口  
