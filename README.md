@@ -206,7 +206,7 @@ for {
 // 用于接收连接请求的协程数量，默认为2
 mainServer.AcceptCount = 10
 
-// 客户端空闲超时时间,<=0则不设置超时
+// 客户端空闲超时时间(秒)，默认300s,<=0则不设置超时
 mainServer.IdleSessionTimeOut = 10
 ```
 
