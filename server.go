@@ -18,7 +18,7 @@ type Server struct {
 	idleSessionTimeOutDuration time.Duration // 超时持续时间，用于设置deadline
 
 	AcceptCount        int // 用于接收连接请求的协程数量
-	IdleSessionTimeOut int // 客户端空闲超时时间,为0则不清理
+	IdleSessionTimeOut int // 客户端空闲超时时间,<=0则不设置超时
 
 	onError              func(error)               // 错误方法
 	onMessage            func(*AppSession, []byte) // 接收到新消息

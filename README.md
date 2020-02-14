@@ -10,11 +10,11 @@ go get github.com/zboyco/go-server
 ```go
 // main
 func main() {
-    // 新建服务
+	// 新建服务
 	mainServer := goserver.New("", 9043)
-    // 注册OnMessage事件
+	// 注册OnMessage事件
 	mainServer.SetOnMessage(onMessage)
-    // 开启服务
+	// 开启服务
 	mainServer.Start()
 }
 
@@ -24,21 +24,17 @@ func onMessage(client *goserver.AppSession, token []byte) {
 	result := string(token)
 	// 输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
-    // 发送给客户端
+	// 发送给客户端
 	client.Send([]byte("Got!"))
 }
 ```
 ## 自定义拆包协议
 go-server 采用标准库`bufio.Scanner`实现数据拆包，默认使用`ScanLines`实现换行符拆包，支持自定义拆包规则，可以根据自己的需求制定，只需要自定义一个`bufio.SplitFunc`方法即可。  
-假设我们采用 `head`+`body`的方式定义package，并指定第1个字节是`'$'`，第4个字节是`'#'`,第2、3为两个字节使用`int16`存储`body`长度，例子如下：
+假设我们采用 `head`+`body`的方式定义package，并指定第1个字节是`'$'`，第4个字节是`'#'`,第2、3位两个字节使用`int16`存储`body`长度，例子如下：
 ```go
 func main() {
 	// 新建服务
 	mainServer := goserver.New("", 9043)
-	// 设置Socket接收协程数量
-	mainServer.AcceptCount = 10
-	// 设置会话闲置超时时间，为0则不超时
-	mainServer.IdleSessionTimeOut = 10
 	// 根据协议定义拆包规则
 	mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
 		if atEOF {
@@ -68,32 +64,36 @@ func onMessage(client *goserver.AppSession, token []byte) {
 	result := string(token)
 	// 输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
-    // 发送给客户端
+	// 发送给客户端
 	client.Send([]byte("Got!"))
 }
 ```
 ## 使用命令方式调用方法
 上面的使用方法，我们都将接收到的消息放在一个`onMessage`中处理，而多数时候，我们希望将不同的请求使用不同的方法处理，go-server 提供了一种方式，配合`ReceiveFilter`过滤器 和`Action`处理模块，可以实现不同请求调用不同方法。  
-`ReceiveFilter`过滤器有两个方法,`splitFunc`负责拆包,`ResolveAction`负责将每一个`package`解析成`ActionName`和`Message`两个部分;
+
+`ReceiveFilter`过滤器有两个方法,`splitFunc`负责拆包,`resolveAction`负责将每一个`package`解析成`ActionName`和`Message`两个部分;  
+
 `Action`处理模块负责注册方法到go-server中,供go-server调用;
 > go-server 默认提供了两种常用的过滤器,分别为 `开始结束标记`和`固定头协议` 两种,也可以自定义过滤器,只需要实现`ReceiveFilter`接口即可  
+> 自定义过滤器的方法可以参考[socket.go文件](https://github.com/zboyco/go-server/blob/master/socket.go)  
+> `Action`模块可以注册多个,只要调用`模块根路径(ReturnRootPath)`+`方法名`没有重复即可，如有重复，在注册的时候会返回错误提示。  
 
-下面用一个例子演示命令方式调用:
+下面用一个例子演示命令方式调用:  
 server端:
 ```go
 func main() {
 	// 新建服务
 	mainServer := goserver.New("", 9043)
-    // 开始结束标记过滤器
+	// 开始结束标记过滤器
 	mainServer.SetReceiveFilter(&go_server.BeginEndMarkReceiveFilter{
 		Begin: []byte{'!', '$'},
 		End:   []byte{'$', '!'},
 	})
-    // 固定头部协议过滤器
+	// 固定头部协议过滤器
 	//mainServer.SetReceiveFilter(&goserver.FixedHeaderReceiveFilter{})
 	// 注册OnError事件
 	mainServer.SetOnError(onError)
-    // 注册Action
+	// 注册Action
 	err := mainServer.RegisterAction(&module{})
 	if err != nil {
 		log.Panic(err)
@@ -124,7 +124,7 @@ func (m *module) Say(client *goserver.AppSession, token []byte) {
 	result := string(token)
 	//输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
-    // 发送给客户端
+	// 发送给客户端
 	client.Send([]byte("Got!"))
 }
 ```
@@ -133,8 +133,8 @@ client端:
 func SendByBeginEndMark(conn net.Conn, msg string) error {
 	begin := []byte{'!', '$'}
 	end := []byte{'$', '!'}
-    // 指定调用方法路径
-    actionName := []byte("/v1/Say")
+	// 指定调用方法路径
+	actionName := []byte("/v1/Say")
 
 	var headBytes = make([]byte, 4)
 	
@@ -164,6 +164,52 @@ func SendByBeginEndMark(conn net.Conn, msg string) error {
 	return nil
 }
 ```
+
+## 其他配置
+go-server 另外提供两组方法和属性,如下所示。
+### 三个设置通知的方法：
+```go
+// 用来输出错误信息
+SetOnError(onErrorFunc func(error))
+// 新会话连接通知
+SetOnNewSessionRegister(onNewSessionRegisterFunc func(*AppSession))
+// 会话关闭通知
+SetOnSessionClosed(onSessionClosedFunc func(*AppSession, string))
+```
+
+### 三个获取在线会话的方法:
+```go
+// 通过ID获取会话
+GetSessionByID(id string) (*AppSession, error)
+// 通过属性获取会话
+GetSessionByAttr(attr map[string]interface{}) <-chan *AppSession
+// 获取所有会话
+GetAllSessions() <-chan *AppSession
+```
+> 其中`GetSessionByAttr`返回所有属性值与传入参数有且想等的会话  
+> `GetSessionByAttr`和`GetAllSessions`都返回一个无缓冲的`channel`  
+
+example:
+```go
+sessions := mainServer.GetAllSessions()
+for {
+	session, ok := <-sessions
+	if !ok {
+		break
+	}
+	session.Send([]byte(fmt.Sprintf("server to client [%v]: hi~", session.ID)))
+}
+```
+
+### 两个服务属性
+```go
+// 用于接收连接请求的协程数量，默认为2
+mainServer.AcceptCount = 10
+
+// 客户端空闲超时时间,<=0则不设置超时
+mainServer.IdleSessionTimeOut = 10
+```
+
 
 ## 下面记录这个包实现的过程
 1. [实现socket服务](https://github.com/zboyco/go-server/tree/step-1)  
