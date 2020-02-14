@@ -11,7 +11,7 @@ type Action interface {
 	ReturnRootPath() string // 返回当前模块根路径
 }
 
-// RegisterAction 注册方法处理模块
+// RegisterAction 注册方法处理模块（命令路由）
 func (server *Server) RegisterAction(m Action) error {
 	mType := reflect.TypeOf(m)
 	mValue := reflect.ValueOf(m)

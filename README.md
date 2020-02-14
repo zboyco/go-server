@@ -1,11 +1,22 @@
 # go-server
+go-server 是我在学习golang的过程中，从最简单的socket一步一步改造形成的，目前功能如下：  
+1. 普通的tcp功能（废话）  
+2. 使用标准库`bufio.Scanner`实现拆包，可以直接使用`bufio.Scanner`内置的拆包协议  
+3. 提供普通`OnMessage`和命令路由两种使用模式  
+4. 采用实现`Action`接口的方式注册路由
+5. 过滤器支持自定义，只需实现`ReceiveFilter`接口  
+6. 支持设置会话超时时间，超时的会话会自动关闭  
+7. 提供会话查找方法，可以根据ID或自定义属性查找会话  
+8. ...原谅我不会写文档 (╥╯^╰╥)  
+9. 有什么问题大家随便留言
 
+# 使用方法
 ## 安装  
 ```text
 go get github.com/zboyco/go-server
 ```
 
-## 简单使用方法
+## 简单使用
 默认使用换行符`\n`拆分数据包
 ```go
 // main
@@ -68,7 +79,7 @@ func onMessage(client *goserver.AppSession, token []byte) {
 	client.Send([]byte("Got!"))
 }
 ```
-## 使用命令方式调用方法
+## 使用命令路由方式调用方法
 上面的使用方法，我们都将接收到的消息放在一个`onMessage`中处理，而多数时候，我们希望将不同的请求使用不同的方法处理，go-server 提供了一种方式，配合`ReceiveFilter`过滤器 和`Action`处理模块，可以实现不同请求调用不同方法。  
 
 `ReceiveFilter`过滤器有两个方法,`splitFunc`负责拆包,`resolveAction`负责将每一个`package`解析成`ActionName`和`Message`两个部分;  
@@ -164,19 +175,42 @@ func SendByBeginEndMark(conn net.Conn, msg string) error {
 }
 ```
 
-## 其他配置
-go-server 另外提供两组方法和属性,如下所示。
-### 三个设置通知的方法：
+# 包结构介绍
+## Server 服务
+`Server`是一个go-server的基本结构，可以理解为一个`Server`就是一个socket服务，提供如下方法： 
+
+ ### 1. 两个属性
 ```go
-// 用来输出错误信息
+// 用于接收连接请求的协程数量，默认为2
+mainServer.AcceptCount = 10
+
+// 客户端空闲超时时间(秒)，默认300s,<=0则不设置超时
+mainServer.IdleSessionTimeOut = 10
+```
+### 2. 数据处理
+```go
+// 设置数据拆包方法
+SetSplitFunc(splitFunc bufio.SplitFunc)
+// 设置接收到新消息处理方法
+SetOnMessage(onMessageFunc func(*AppSession, []byte))
+```
+### 3. 命令路由
+```go
+// 设置过滤器
+SetReceiveFilter(s ReceiveFilter)
+// 注册方法处理模块（命令路由）
+RegisterAction(m Action) error
+```
+### 4. 三个设置通知的方法：
+```go
+// 设置输出错误信息方法
 SetOnError(onErrorFunc func(error))
-// 新会话连接通知
+// 设置新会话连接通知
 SetOnNewSessionRegister(onNewSessionRegisterFunc func(*AppSession))
-// 会话关闭通知
+// 设置会话关闭通知
 SetOnSessionClosed(onSessionClosedFunc func(*AppSession, string))
 ```
-
-### 三个获取在线会话的方法:
+### 5. 三个获取在线会话的方法:
 ```go
 // 通过ID获取会话
 GetSessionByID(id string) (*AppSession, error)
@@ -199,18 +233,30 @@ for {
 	session.Send([]byte(fmt.Sprintf("server to client [%v]: hi~", session.ID)))
 }
 ```
-
-### 两个服务属性
+## AppSession 会话
+`AppSession`是go-server中封装的会话结构，暴露以下两个属性：
 ```go
-// 用于接收连接请求的协程数量，默认为2
-mainServer.AcceptCount = 10
+ID       string   // 连接唯一标识
+IsClosed bool     // 标记会话是否关闭
+```
+`ID` 是会话的唯一标识，可以用来查找指定的会话；  
+`IsClosed` 标记会话是否已经关闭，有需要时可以用来进行判断。  
+另外`AppSession`还提供了一个可以设置自定义属性的`map[string]interface{}`，go-server可以通过自定义属性作为条件查询会话（后面介绍），通过以下4个方法可以操作会话的自定义属性：  
+```go
+// AddAttr 添加会话属性
+AddAttr(key string, value interface{}) error
 
-// 客户端空闲超时时间(秒)，默认300s,<=0则不设置超时
-mainServer.IdleSessionTimeOut = 10
+// SetAttr 设置会话属性
+SetAttr(key string, value interface{})
+
+// GetAttr 获取会话属性
+GetAttr(key string) (interface{}, error)
+
+// DelAttr 删除会话属性
+DelAttr(key string) error
 ```
 
-
-## 下面记录这个包实现的过程
+## 最后记录下这个包一步一步折腾的过程
 1. [实现socket服务](https://github.com/zboyco/go-server/tree/step-1)  
     > 简单实现一个socket服务,能接收客户端连接并接收数据  
 2. [循环读取数据](https://github.com/zboyco/go-server/tree/step-2)  
@@ -259,4 +305,4 @@ mainServer.IdleSessionTimeOut = 10
     实现通过ID获取指定会话方法（返回会话）  
     实现获取所有会话方法（返回会话channel）  
     实现通过属性获取会话方法（返回会话channel）  
-    - 包名修改为`goserver`,发布第一`tag`  
+    包名修改为`goserver`,发布第一个`tag`  
