@@ -1,5 +1,9 @@
 # go-server
-go-server 是我在学习golang的过程中，从最简单的socket一步一步改造形成的，目前功能如下：  
+项目地址：[https://github.com/zboyco/go-server](https://github.com/zboyco/go-server)  
+
+go-server 是我在学习golang的过程中，从最简单的socket一步一步改造形成的。  
+
+目前功能如下：  
 1. 普通的tcp功能（废话）  
 2. 使用标准库`bufio.Scanner`实现拆包，可以直接使用`bufio.Scanner`内置的拆包协议  
 3. 提供普通`OnMessage`和命令路由两种使用模式  
@@ -7,8 +11,13 @@ go-server 是我在学习golang的过程中，从最简单的socket一步一步�
 5. 过滤器支持自定义，只需实现`ReceiveFilter`接口  
 6. 支持设置会话超时时间，超时的会话会自动关闭  
 7. 提供会话查找方法，可以根据ID或自定义属性查找会话  
-8. ...原谅我不会写文档 (╥╯^╰╥)  
-9. 有什么问题大家随便留言
+8. ...  
+
+问题如下：  
+1. 目前只支持tcp协议
+2. ...原谅我不会写文档 (╥╯^╰╥)  
+3. 有什么问题大家随便留言  
+4. ...
 
 # 使用方法
 ## 安装  
