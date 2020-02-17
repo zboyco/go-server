@@ -6,13 +6,13 @@ import (
 	"reflect"
 )
 
-// Action 方法处理模块
-type Action interface {
+// ActionModule 方法处理模块
+type ActionModule interface {
 	ReturnRootPath() string // 返回当前模块根路径
 }
 
 // RegisterAction 注册方法处理模块（命令路由）
-func (server *Server) RegisterAction(m Action) error {
+func (server *Server) RegisterAction(m ActionModule) error {
 	mType := reflect.TypeOf(m)
 	mValue := reflect.ValueOf(m)
 
@@ -25,10 +25,10 @@ func (server *Server) RegisterAction(m Action) error {
 		tem := mValue.Method(i).Interface()
 		if temFunc, ok := tem.(func(*AppSession, []byte)); ok {
 			funcName := fmt.Sprintf("%s/%s", prefix, mType.Method(i).Name)
-			if _, exist := server.actions[funcName]; exist {
-				return errors.New(fmt.Sprintf("action %s already exist", funcName))
+			err := server.Action(funcName,temFunc)
+			if err != nil{
+				return err
 			}
-			server.actions[funcName] = temFunc
 		}
 	}
 	return nil
@@ -40,5 +40,17 @@ func (server *Server) hookAction(funcName string, session *AppSession, token []b
 		return errors.New("action not exist")
 	}
 	server.actions[funcName](session, token)
+	return nil
+}
+
+// Action 添加单个Action
+func (server *Server) Action(path string,actionFunc func(client *AppSession,msg []byte)) error {
+	if path == "" || path[0] != '/'{
+		return errors.New("path must start with '/'")
+	}
+	if _, exist := server.actions[path]; exist {
+		return errors.New(fmt.Sprintf("action %s already exist", path))
+	}
+	server.actions[path] = actionFunc
 	return nil
 }

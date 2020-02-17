@@ -40,7 +40,20 @@ func main() {
 
 	mainServer.SetReceiveFilter(&goserver.FixedHeaderReceiveFilter{})
 
-	err := mainServer.RegisterAction(&module{})
+	err := mainServer.Action("/test", func(client *goserver.AppSession, msg []byte) {
+		// 将bytes转为字符串
+		result := string(msg)
+
+		// 输出结果
+		log.Println("test接收到客户[", client.ID, "]数据:", result)
+		// 发送给客户端
+		client.Send([]byte("Got!"))
+	})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	err = mainServer.RegisterAction(&module{})
 	if err != nil {
 		log.Panic(err)
 	}
