@@ -9,6 +9,7 @@ import (
 
 // ResolveActionFunc 解析数据返回actionName和message
 type ResolveActionFunc func(token []byte) (actionName string, msg []byte, err error)
+
 // ReceiveFilter 过滤器接口
 type ReceiveFilter interface {
 	SplitFunc() bufio.SplitFunc
@@ -33,7 +34,7 @@ type BeginEndMarkReceiveFilter struct {
 func (s *BeginEndMarkReceiveFilter) SplitFunc() bufio.SplitFunc {
 	return func(data []byte, atEOF bool) (int, []byte, error) {
 		if atEOF {
-			return 0, nil, errors.New("EOF")
+			return 0, nil, nil
 		}
 		start, end := 0, 0
 		if start = bytes.Index(data, s.Begin); start < 0 {
@@ -79,7 +80,7 @@ type FixedHeaderReceiveFilter struct {
 func (s *FixedHeaderReceiveFilter) SplitFunc() bufio.SplitFunc {
 	return func(data []byte, atEOF bool) (int, []byte, error) {
 		if atEOF {
-			return 0, nil, errors.New("EOF")
+			return 0, nil, nil
 		}
 		if len(data) > 4 {
 			packageLength := uint32(0)

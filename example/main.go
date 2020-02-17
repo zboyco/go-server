@@ -18,7 +18,7 @@ func main() {
 	// 根据协议定义拆包规则
 	//mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
 	//	if atEOF {
-	//		return 0, nil, errors.New("EOF")
+	//		return 0, nil, nil
 	//	}
 	//	if data[0] != '$' || data[3] != '#' {
 	//		return 0, nil, errors.New("数据异常")

@@ -166,7 +166,9 @@ func (server *Server) handleClient(conn net.Conn) {
 	}
 	if err != nil {
 		server.closeSession(session, err.Error())
+		return
 	}
+	server.closeSession(session, "EOF")
 }
 
 func (server *Server) handleOnError(err error) {
