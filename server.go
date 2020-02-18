@@ -2,6 +2,7 @@ package goserver
 
 import (
 	"bufio"
+	"crypto/tls"
 	"fmt"
 	uuid "github.com/satori/go.uuid"
 	"log"
@@ -16,6 +17,7 @@ type Server struct {
 	port                       int           // 服务器端口
 	sessionSource              *sessionPool  // Session池
 	idleSessionTimeOutDuration time.Duration // 超时持续时间，用于设置deadline
+	tlsConfig                  *tls.Config   // tls配置
 
 	AcceptCount        int // 用于接收连接请求的协程数量
 	IdleSessionTimeOut int // 客户端空闲超时时间(秒)，默认300s,<=0则不设置超时
@@ -30,8 +32,13 @@ type Server struct {
 	actions       map[string]func(*AppSession, []byte)                          // 消息处理方法字典
 }
 
-// New 新建一个服务
+// New 新建一个tcp4服务
 func New(ip string, port int) *Server {
+	return NewWithTLS(ip, port, nil)
+}
+
+// NewWithTLS 新建一个tls加密服务
+func NewWithTLS(ip string, port int, config *tls.Config) *Server {
 	return &Server{
 		ip:   ip,
 		port: port,
@@ -42,6 +49,7 @@ func New(ip string, port int) *Server {
 		AcceptCount:        2,
 		actions:            make(map[string]func(*AppSession, []byte)),
 		splitFunc:          bufio.ScanLines,
+		tlsConfig:          config,
 	}
 }
 
@@ -59,12 +67,15 @@ func (server *Server) Start() {
 
 	server.idleSessionTimeOutDuration = time.Duration(server.IdleSessionTimeOut) * time.Second
 
-	// 定义一个本机端口
-	localAddress, _ := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", server.ip, server.port))
-
+	var tcpListener net.Listener
+	var err error
+	addr := fmt.Sprintf("%s:%d", server.ip, server.port)
 	// 监听端口
-	tcpListener, err := net.ListenTCP("tcp", localAddress)
-
+	if server.tlsConfig == nil {
+		tcpListener, err = net.Listen("tcp4", addr)
+	} else {
+		tcpListener, err = tls.Listen("tcp4", addr, server.tlsConfig)
+	}
 	if err != nil {
 		log.Println("监听出错, ", err)
 		server.handleOnError(err)
