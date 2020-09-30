@@ -5,12 +5,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/zboyco/go-server"
 	"log"
 	"net"
 	"sync"
 	"testing"
 	"time"
+
+	goserver "github.com/zboyco/go-server"
 )
 
 func init() {
@@ -28,7 +29,7 @@ func init() {
 			}
 			if len(data) > 4 {
 				length := uint16(0)
-				binary.Read(bytes.NewReader(data[1:3]), binary.BigEndian, &length)
+				_ = binary.Read(bytes.NewReader(data[1:3]), binary.BigEndian, &length)
 				if int(length)+4 <= len(data) {
 					return int(length) + 4, data[4 : int(length)+4], nil
 				}
@@ -51,14 +52,9 @@ func TestSocket(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			tcpAddr, err := net.ResolveTCPAddr("tcp4", ":9043")
-			if err != nil {
-				t.Fatalf("Fatal error: %s", err.Error())
-			}
-			conn, err := net.DialTCP("tcp", nil, tcpAddr)
-			if err != nil {
-				t.Fatalf("Fatal error: %s", err.Error())
-			}
+			tcpAddr, _ := net.ResolveTCPAddr("tcp4", ":9043")
+			conn, _ := net.DialTCP("tcp", nil, tcpAddr)
+
 			defer conn.Close()
 
 			var headSize int
@@ -70,22 +66,22 @@ func TestSocket(t *testing.T) {
 			content := []byte(s)
 			headSize = len(content)
 			binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
-			conn.Write(headBytes)
-			conn.Write(content)
+			_, _ = conn.Write(headBytes)
+			_, _ = conn.Write(content)
 
 			s = fmt.Sprintf("hello golang - %v", i)
 			content = []byte(s)
 			headSize = len(content)
 			binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
-			conn.Write(headBytes)
-			conn.Write(content)
+			_, _ = conn.Write(headBytes)
+			_, _ = conn.Write(content)
 
 			s = fmt.Sprintf("hello socket - %v", i)
 			content = []byte(s)
 			headSize = len(content)
 			binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
-			conn.Write(headBytes)
-			conn.Write(content)
+			_, _ = conn.Write(headBytes)
+			_, _ = conn.Write(content)
 		}(i)
 	}
 	wg.Wait()
@@ -113,22 +109,22 @@ func BenchmarkSocket(b *testing.B) {
 		content := []byte(s)
 		headSize = len(content)
 		binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
-		conn.Write(headBytes)
-		conn.Write(content)
+		_, _ = conn.Write(headBytes)
+		_, _ = conn.Write(content)
 
 		s = fmt.Sprintf("hello golang - %v", i)
 		content = []byte(s)
 		headSize = len(content)
 		binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
-		conn.Write(headBytes)
-		conn.Write(content)
+		_, _ = conn.Write(headBytes)
+		_, _ = conn.Write(content)
 
 		s = fmt.Sprintf("hello socket - %v", i)
 		content = []byte(s)
 		headSize = len(content)
 		binary.BigEndian.PutUint16(headBytes[1:], uint16(headSize))
-		conn.Write(headBytes)
-		conn.Write(content)
+		_, _ = conn.Write(headBytes)
+		_, _ = conn.Write(content)
 	}
 }
 

@@ -108,7 +108,7 @@ func onMessage(client *goserver.AppSession, token []byte) {
 
 `ActionModule`处理模块负责注册方法到go-server中,供go-server调用;
 > go-server 默认提供了两种常用的过滤器,分别为 `开始结束标记`和`固定头协议` 两种,也可以自定义过滤器,只需要实现`ReceiveFilter`接口即可，自定义过滤器的方法参考[socket.go文件](https://github.com/zboyco/go-server/blob/master/socket.go)    
-> `ActionModule`模块可以注册多个,只要调用`模块根路径(ReturnRootPath)`+`方法名`没有重复即可，如有重复，在注册的时候会返回错误提示。  
+> `ActionModule`模块可以注册多个,只要调用`模块根路径(Root)`+`方法名`没有重复即可，如有重复，在注册的时候会返回错误提示。  
 > 注意实现`ActionModule`模块的方法名要以大写字母开头  
 
 下面用一个例子演示命令方式调用:  
@@ -156,9 +156,9 @@ func onError(err error) {
 type module struct {
 }
 
-// 实现ReturnRootPath方法,返回调用根路径
-func (m *module) ReturnRootPath() string {
-	return "v1"
+// 实现Root方法,返回调用根路径
+func (m *module) Root() string {
+	return "/v1"
 }
 
 // 定义命令
@@ -251,12 +251,13 @@ SetOnSessionClosed(onSessionClosedFunc func(*AppSession, string))
 ```go
 // 通过ID获取会话
 GetSessionByID(id string) (*AppSession, error)
-// 通过属性获取会话
-GetSessionByAttr(attr map[string]interface{}) <-chan *AppSession
 // 获取所有会话
 GetAllSessions() <-chan *AppSession
+// 通过属性条件获取会话
+// type ConditionFunc func(map[string]interface{}) bool
+GetSessionByAttr(cond ConditionFunc) <-chan *AppSession
 ```
-> 其中`GetSessionByAttr`返回所有属性值与传入参数有且想等的会话  
+> `GetSessionByAttr`返回所有ConditionFunc为true的会话  
 > `GetSessionByAttr`和`GetAllSessions`都返回一个无缓冲的`channel`  
 
 example:
@@ -278,7 +279,7 @@ IsClosed bool     // 标记会话是否关闭
 ```
 `ID` 是会话的唯一标识，可以用来查找指定的会话；  
 `IsClosed` 标记会话是否已经关闭，有需要时可以用来进行判断。  
-另外`AppSession`还提供了一个可以设置自定义属性的`map[string]interface{}`，go-server可以通过自定义属性作为条件查询会话（上面已介绍`GetSessionByAttr`），通过以下4个方法可以操作会话的自定义属性：  
+另外`AppSession`还提供了一个可以设置自定义属性的`map[string]interface{}`，go-server可以通过自定义属性作为条件查询会话（上面已介绍`GetSessionByAttr`），通过以下4个方法可以直接操作会话的自定义属性：  
 ```go
 // AddAttr 添加会话属性
 AddAttr(key string, value interface{}) error

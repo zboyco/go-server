@@ -1,14 +1,14 @@
 package goserver
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 // ActionModule 方法处理模块
 type ActionModule interface {
-	ReturnRootPath() string // 返回当前模块根路径
+	Root() string // 返回当前模块根路径
 }
 
 // RegisterAction 注册方法处理模块（命令路由）
@@ -16,18 +16,19 @@ func (server *Server) RegisterAction(m ActionModule) error {
 	mType := reflect.TypeOf(m)
 	mValue := reflect.ValueOf(m)
 
-	prefix := m.ReturnRootPath()
-	if prefix != "" {
-		prefix = "/" + prefix
+	prefix := fmt.Sprintf("/%s", m.Root())
+	prefix = strings.ReplaceAll(prefix, "//", "/")
+	if prefix[len(prefix)-1] == '/' {
+		prefix = prefix[:len(prefix)-1]
 	}
 
 	for i := 0; i < mType.NumMethod(); i++ {
 		tem := mValue.Method(i).Interface()
 		if temFunc, ok := tem.(func(*AppSession, []byte)); ok {
 			funcName := fmt.Sprintf("%s/%s", prefix, mType.Method(i).Name)
-			err := server.Action(funcName, temFunc)
+			err := server.Action(strings.ToLower(funcName), temFunc)
 			if err != nil {
-				return err
+				return fmt.Errorf("%s => %s", funcName, err.Error())
 			}
 		}
 	}
@@ -36,8 +37,9 @@ func (server *Server) RegisterAction(m ActionModule) error {
 
 // hookAction 调用action
 func (server *Server) hookAction(funcName string, session *AppSession, token []byte) error {
+	funcName = strings.ToLower(funcName)
 	if _, exist := server.actions[funcName]; !exist {
-		return errors.New(fmt.Sprintf("action \"%v\" not exist", funcName))
+		return ActionNotFoundError
 	}
 	server.actions[funcName](session, token)
 	return nil
@@ -46,10 +48,10 @@ func (server *Server) hookAction(funcName string, session *AppSession, token []b
 // Action 添加单个Action
 func (server *Server) Action(path string, actionFunc func(client *AppSession, msg []byte)) error {
 	if path == "" || path[0] != '/' {
-		return errors.New("path must start with '/'")
+		return PathFormatError
 	}
 	if _, exist := server.actions[path]; exist {
-		return errors.New(fmt.Sprintf("action %s already exist", path))
+		return ActionConflictError
 	}
 	server.actions[path] = actionFunc
 	return nil

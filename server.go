@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"crypto/tls"
 	"fmt"
-	uuid "github.com/satori/go.uuid"
 	"log"
 	"net"
 	"sync"
 	"time"
+
+	uuid "github.com/satori/go.uuid"
 )
 
 // Server 服务结构
@@ -114,7 +115,7 @@ func (server *Server) Start() {
 func (server *Server) handleClient(conn net.Conn) {
 	// 创建会话对象
 	session := &AppSession{
-		ID:   uuid.Must(uuid.NewV4()).String(),
+		ID:   uuid.NewV4().String(),
 		conn: conn,
 		attr: make(map[string]interface{}),
 	}
@@ -226,12 +227,17 @@ func (server *Server) GetSessionByID(id string) (*AppSession, error) {
 	return server.sessionSource.getSessionByID(id)
 }
 
-// GetSessionByAttr 通过属性获取会话
-func (server *Server) GetSessionByAttr(attr map[string]interface{}) <-chan *AppSession {
-	return server.sessionSource.getSessionByAttr(attr)
+// GetSessionByAttr 通过属性条件获取会话
+func (server *Server) GetSessionByAttr(cond ConditionFunc) <-chan *AppSession {
+	return server.sessionSource.getSessionByAttr(cond)
 }
 
 // GetAllSessions 获取所有会话
 func (server *Server) GetAllSessions() <-chan *AppSession {
 	return server.sessionSource.getAllSessions()
+}
+
+// CountSessions 计算现有会话数量
+func (server *Server) CountSessions() int {
+	return server.sessionSource.count()
 }

@@ -68,19 +68,19 @@ func (s *sessionPool) getSessionByID(id string) (*AppSession, error) {
 	return nil, errors.New("not found session")
 }
 
+// 属性条件判断方法
+type ConditionFunc func(map[string]interface{}) bool
+
 // 通过属性获取会话
-func (s *sessionPool) getSessionByAttr(attr map[string]interface{}) <-chan *AppSession {
+func (s *sessionPool) getSessionByAttr(cond ConditionFunc) <-chan *AppSession {
 	result := make(chan *AppSession)
 	go func() {
 		defer close(result)
 		s.pool.Range(func(id, sessionInterface interface{}) bool {
 			session := sessionInterface.(*AppSession)
-			for key, value := range attr {
-				if attr, err := session.GetAttr(key); err != nil || attr == value {
-					return true
-				}
+			if cond(session.attr) {
+				result <- session
 			}
-			result <- session
 			return true
 		})
 	}()

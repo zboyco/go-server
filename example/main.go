@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/zboyco/go-server"
 	"log"
 	"time"
+
+	goserver "github.com/zboyco/go-server"
 )
 
 func main() {
@@ -88,15 +89,15 @@ func main() {
 }
 
 // 接收数据方法
-func onMessage(client *goserver.AppSession, token []byte) {
-	// 将bytes转为字符串
-	result := string(token)
+// func onMessage(client *goserver.AppSession, token []byte) {
+// 	// 将bytes转为字符串
+// 	result := string(token)
 
-	// 输出结果
-	log.Println("接收到客户[", client.ID, "]数据:", result)
-	// 发送给客户端
-	client.Send([]byte("Got!"))
-}
+// 	// 输出结果
+// 	log.Println("接收到客户[", client.ID, "]数据:", result)
+// 	// 发送给客户端
+// 	client.Send([]byte("Got!"))
+// }
 
 // 接收错误方法
 func onError(err error) {
@@ -107,8 +108,8 @@ func onError(err error) {
 type module struct {
 }
 
-func (m *module) ReturnRootPath() string {
-	return ""
+func (m *module) Root() string {
+	return "/"
 }
 
 func (m *module) Say(client *goserver.AppSession, token []byte) {
@@ -124,8 +125,8 @@ func (m *module) Say(client *goserver.AppSession, token []byte) {
 type otherModule struct {
 }
 
-func (m *otherModule) ReturnRootPath() string {
-	return "v2"
+func (m *otherModule) Root() string {
+	return "/v2"
 }
 
 func (m *otherModule) Print(client *goserver.AppSession, token []byte) {
