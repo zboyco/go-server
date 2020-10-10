@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-type ActionFunc func(*AppSession, []byte) []byte
+type ActionFunc func(*AppSession, []byte) ([]byte, error)
 
 // ActionModule 方法处理模块
 type ActionModule interface {
@@ -24,11 +24,37 @@ func (server *Server) RegisterModule(m ActionModule) error {
 		prefix = prefix[:len(prefix)-1]
 	}
 
+	var (
+		beforeAction Middlewares
+		afterAction  Middlewares
+	)
+
+	if middlewaresBeforeAction, ok := m.(MiddlewaresBeforeAction); ok {
+		beforeAction = middlewaresBeforeAction.MiddlewaresBeforeAction()
+	}
+	if middlewaresAfterAction, ok := m.(MiddlewaresAfterAction); ok {
+		afterAction = middlewaresAfterAction.MiddlewaresAfterAction()
+	}
+
 	for i := 0; i < mType.NumMethod(); i++ {
 		tem := mValue.Method(i).Interface()
-		if temFunc, ok := tem.(func(*AppSession, []byte) []byte); ok {
+		if temFunc, ok := tem.(func(*AppSession, []byte) ([]byte, error)); ok {
 			funcName := fmt.Sprintf("%s/%s", prefix, mType.Method(i).Name)
-			err := server.Action(strings.ToLower(funcName), temFunc)
+			actions := make([]ActionFunc, 0)
+			if server.middlewaresBefore != nil {
+				actions = server.middlewaresBefore
+			}
+			if beforeAction != nil {
+				actions = append(actions, beforeAction...)
+			}
+			actions = append(actions, temFunc)
+			if afterAction != nil {
+				actions = append(actions, afterAction...)
+			}
+			if server.middlewaresAfter != nil {
+				actions = append(actions, server.middlewaresAfter...)
+			}
+			err := server.Action(strings.ToLower(funcName), actions...)
 			if err != nil {
 				return fmt.Errorf("%s => %s", funcName, err.Error())
 			}
@@ -40,18 +66,25 @@ func (server *Server) RegisterModule(m ActionModule) error {
 // hookAction 调用action
 func (server *Server) hookAction(funcName string, session *AppSession, token []byte) error {
 	funcName = strings.ToLower(funcName)
-	if _, exist := server.actions[funcName]; !exist {
+	actions, exist := server.actions[funcName]
+	if !exist {
 		return ActionNotFoundError
 	}
-	out := server.actions[funcName](session, token)
-	if out != nil {
-		session.Send(out)
+	var err error
+	for i := range actions {
+		token, err = actions[i](session, token)
+		if err != nil {
+			return err
+		}
+	}
+	if token != nil {
+		session.Send(token)
 	}
 	return nil
 }
 
 // Action 添加单个Action
-func (server *Server) Action(path string, actionFunc ActionFunc) error {
+func (server *Server) Action(path string, actionFunc ...ActionFunc) error {
 	if path == "" || path[0] != '/' {
 		return PathFormatError
 	}
@@ -60,4 +93,14 @@ func (server *Server) Action(path string, actionFunc ActionFunc) error {
 	}
 	server.actions[path] = actionFunc
 	return nil
+}
+
+type Middlewares []ActionFunc
+
+type MiddlewaresBeforeAction interface {
+	MiddlewaresBeforeAction() Middlewares
+}
+
+type MiddlewaresAfterAction interface {
+	MiddlewaresAfterAction() Middlewares
 }

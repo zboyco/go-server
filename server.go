@@ -28,9 +28,11 @@ type Server struct {
 	onNewSessionRegister func(*AppSession)         // 新客户端接入
 	onSessionClosed      func(*AppSession, string) // 客户端关闭通知
 
-	splitFunc     bufio.SplitFunc                                               // 拆包规则
-	resolveAction func(token []byte) (actionName string, msg []byte, err error) // 解析请求方法
-	actions       map[string]ActionFunc                                         // 消息处理方法字典
+	splitFunc         bufio.SplitFunc                                               // 拆包规则
+	resolveAction     func(token []byte) (actionName string, msg []byte, err error) // 解析请求方法
+	middlewaresBefore Middlewares                                                   // action执行前中间件
+	middlewaresAfter  Middlewares                                                   // action执行后中间件
+	actions           map[string][]ActionFunc                                       // 消息处理方法字典
 }
 
 // New 新建一个tcp4服务
@@ -48,7 +50,7 @@ func NewWithTLS(ip string, port int, config *tls.Config) *Server {
 		},
 		IdleSessionTimeOut: 300,
 		AcceptCount:        1,
-		actions:            make(map[string]ActionFunc),
+		actions:            make(map[string][]ActionFunc),
 		splitFunc:          bufio.ScanLines,
 		tlsConfig:          config,
 	}
@@ -220,6 +222,16 @@ func (server *Server) SetOnNewSessionRegister(onNewSessionRegisterFunc func(*App
 // SetOnSessionClosed 设置会话关闭时处理方法
 func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(*AppSession, string)) {
 	server.onSessionClosed = onSessionClosedFunc
+}
+
+// RegisterBeforeMiddlewares 注册aciton前中间件
+func (server *Server) RegisterBeforeMiddlewares(mids Middlewares) {
+	server.middlewaresBefore = mids
+}
+
+// RegisterAfterMiddlewares 注册action后中间件
+func (server *Server) RegisterAfterMiddlewares(mids Middlewares) {
+	server.middlewaresAfter = mids
 }
 
 // GetSessionByID 通过ID获取会话

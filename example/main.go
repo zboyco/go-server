@@ -41,7 +41,7 @@ func main() {
 
 	// mainServer.SetReceiveFilter(&goserver.FixedHeaderReceiveFilter{})
 
-	err := mainServer.Action("/test", func(client *goserver.AppSession, msg []byte) []byte {
+	err := mainServer.Action("/test", func(client *goserver.AppSession, msg []byte) ([]byte, error) {
 		// 将bytes转为字符串
 		result := string(msg)
 
@@ -49,18 +49,36 @@ func main() {
 		log.Println("test接收到客户[", client.ID, "]数据:", result)
 		// 发送给客户端
 		// client.Send([]byte("Got!"))
-		return []byte("Got!")
+		return []byte("Got!"), nil
 	})
 	if err != nil {
 		log.Panic(err)
 	}
+
+	mainServer.RegisterBeforeMiddlewares(goserver.Middlewares{
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-before1-"), nil
+		},
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-before2-"), nil
+		},
+	})
+
+	mainServer.RegisterAfterMiddlewares(goserver.Middlewares{
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-after3-"), nil
+		},
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-after4-"), nil
+		},
+	})
 
 	err = mainServer.RegisterModule(&module{})
 	if err != nil {
 		log.Panic(err)
 	}
 
-	err = mainServer.RegisterModule(&otherModule{})
+	err = mainServer.RegisterModule(&otherModule{name: "-name-"})
 	if err != nil {
 		log.Panic(err)
 	}
@@ -113,14 +131,14 @@ func (m *module) Root() string {
 	return "/"
 }
 
-func (m *module) Say(client *goserver.AppSession, token []byte) []byte {
+func (m *module) Say(client *goserver.AppSession, token []byte) ([]byte, error) {
 	//将bytes转为字符串
 	result := string(token)
 
 	//输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
 
-	return []byte("Got!")
+	return token, nil
 }
 
 type otherModule struct {
@@ -131,12 +149,34 @@ func (m *otherModule) Root() string {
 	return "/v2"
 }
 
-func (m *otherModule) Print(client *goserver.AppSession, token []byte) []byte {
+func (m *otherModule) Print(client *goserver.AppSession, token []byte) ([]byte, error) {
 	//将bytes转为字符串
 	result := string(token)
 
 	//输出结果
-	log.Println(m.name, "Print接收到客户[", client.ID, "]数据:", result)
+	log.Println("接收到客户[", client.ID, "]数据:", result)
 
-	return []byte("Got!")
+	return []byte(result + m.name), nil
+}
+
+func (m *otherModule) MiddlewaresBeforeAction() goserver.Middlewares {
+	return goserver.Middlewares{
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-before3-"), nil
+		},
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-before4-"), nil
+		},
+	}
+}
+
+func (m *otherModule) MiddlewaresAfterAction() goserver.Middlewares {
+	return goserver.Middlewares{
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-after1-"), nil
+		},
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-after2-"), nil
+		},
+	}
 }
