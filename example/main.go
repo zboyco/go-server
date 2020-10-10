@@ -12,7 +12,7 @@ func main() {
 	// 新建服务
 	mainServer := goserver.New("", 9043)
 	// 设置Socket接收协程数量
-	mainServer.AcceptCount = 10
+	// mainServer.AcceptCount = 10
 	// 设置会话闲置超时时间，为0则不超时
 	mainServer.IdleSessionTimeOut = 10
 
@@ -34,32 +34,33 @@ func main() {
 	//	return 0, nil, nil
 	//})
 
-	//mainServer.SetReceiveFilter(&go_server.BeginEndMarkReceiveFilter{
-	//	Begin: []byte{'!', '$'},
-	//	End:   []byte{'$', '!'},
-	//})
+	mainServer.SetReceiveFilter(&goserver.BeginEndMarkReceiveFilter{
+		Begin: []byte{'!', '$'},
+		End:   []byte{'$', '!'},
+	})
 
-	mainServer.SetReceiveFilter(&goserver.FixedHeaderReceiveFilter{})
+	// mainServer.SetReceiveFilter(&goserver.FixedHeaderReceiveFilter{})
 
-	err := mainServer.Action("/test", func(client *goserver.AppSession, msg []byte) {
+	err := mainServer.Action("/test", func(client *goserver.AppSession, msg []byte) []byte {
 		// 将bytes转为字符串
 		result := string(msg)
 
 		// 输出结果
 		log.Println("test接收到客户[", client.ID, "]数据:", result)
 		// 发送给客户端
-		client.Send([]byte("Got!"))
+		// client.Send([]byte("Got!"))
+		return []byte("Got!")
 	})
 	if err != nil {
 		log.Panic(err)
 	}
 
-	err = mainServer.RegisterAction(&module{})
+	err = mainServer.RegisterModule(&module{})
 	if err != nil {
 		log.Panic(err)
 	}
 
-	err = mainServer.RegisterAction(&otherModule{})
+	err = mainServer.RegisterModule(&otherModule{})
 	if err != nil {
 		log.Panic(err)
 	}
@@ -112,29 +113,30 @@ func (m *module) Root() string {
 	return "/"
 }
 
-func (m *module) Say(client *goserver.AppSession, token []byte) {
+func (m *module) Say(client *goserver.AppSession, token []byte) []byte {
 	//将bytes转为字符串
 	result := string(token)
 
 	//输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
 
-	client.Send([]byte("Got!"))
+	return []byte("Got!")
 }
 
 type otherModule struct {
+	name string
 }
 
 func (m *otherModule) Root() string {
 	return "/v2"
 }
 
-func (m *otherModule) Print(client *goserver.AppSession, token []byte) {
+func (m *otherModule) Print(client *goserver.AppSession, token []byte) []byte {
 	//将bytes转为字符串
 	result := string(token)
 
 	//输出结果
-	log.Println("Print接收到客户[", client.ID, "]数据:", result)
+	log.Println(m.name, "Print接收到客户[", client.ID, "]数据:", result)
 
-	client.Send([]byte("Got!"))
+	return []byte("Got!")
 }

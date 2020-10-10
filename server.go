@@ -30,7 +30,7 @@ type Server struct {
 
 	splitFunc     bufio.SplitFunc                                               // 拆包规则
 	resolveAction func(token []byte) (actionName string, msg []byte, err error) // 解析请求方法
-	actions       map[string]func(*AppSession, []byte)                          // 消息处理方法字典
+	actions       map[string]ActionFunc                                         // 消息处理方法字典
 }
 
 // New 新建一个tcp4服务
@@ -47,8 +47,8 @@ func NewWithTLS(ip string, port int, config *tls.Config) *Server {
 			list: make(chan *sessionHandle, 100),
 		},
 		IdleSessionTimeOut: 300,
-		AcceptCount:        2,
-		actions:            make(map[string]func(*AppSession, []byte)),
+		AcceptCount:        1,
+		actions:            make(map[string]ActionFunc),
 		splitFunc:          bufio.ScanLines,
 		tlsConfig:          config,
 	}
@@ -57,8 +57,8 @@ func NewWithTLS(ip string, port int, config *tls.Config) *Server {
 // Start 开始监听
 func (server *Server) Start() {
 	if server.splitFunc == nil {
-		log.Println("error: no split function")
-		return
+		log.Println("use default split function")
+		server.splitFunc = bufio.ScanLines
 	}
 
 	if server.onMessage == nil && server.resolveAction == nil {

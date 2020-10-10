@@ -6,13 +6,15 @@ import (
 	"strings"
 )
 
+type ActionFunc func(*AppSession, []byte) []byte
+
 // ActionModule 方法处理模块
 type ActionModule interface {
 	Root() string // 返回当前模块根路径
 }
 
-// RegisterAction 注册方法处理模块（命令路由）
-func (server *Server) RegisterAction(m ActionModule) error {
+// RegisterModule 注册方法处理模块（命令路由）
+func (server *Server) RegisterModule(m ActionModule) error {
 	mType := reflect.TypeOf(m)
 	mValue := reflect.ValueOf(m)
 
@@ -24,7 +26,7 @@ func (server *Server) RegisterAction(m ActionModule) error {
 
 	for i := 0; i < mType.NumMethod(); i++ {
 		tem := mValue.Method(i).Interface()
-		if temFunc, ok := tem.(func(*AppSession, []byte)); ok {
+		if temFunc, ok := tem.(func(*AppSession, []byte) []byte); ok {
 			funcName := fmt.Sprintf("%s/%s", prefix, mType.Method(i).Name)
 			err := server.Action(strings.ToLower(funcName), temFunc)
 			if err != nil {
@@ -41,12 +43,15 @@ func (server *Server) hookAction(funcName string, session *AppSession, token []b
 	if _, exist := server.actions[funcName]; !exist {
 		return ActionNotFoundError
 	}
-	server.actions[funcName](session, token)
+	out := server.actions[funcName](session, token)
+	if out != nil {
+		session.Send(out)
+	}
 	return nil
 }
 
 // Action 添加单个Action
-func (server *Server) Action(path string, actionFunc func(client *AppSession, msg []byte)) error {
+func (server *Server) Action(path string, actionFunc ActionFunc) error {
 	if path == "" || path[0] != '/' {
 		return PathFormatError
 	}

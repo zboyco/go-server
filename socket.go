@@ -24,7 +24,8 @@ func (server *Server) SetReceiveFilter(s ReceiveFilter) {
 
 // BeginEndMarkReceiveFilter 标记数据包开始和结尾字节
 // 数据包以Begin开始，End结尾
-// 中间部分为 ActionName字符串 + 数据Body
+// 中间1-4位代表ActionName长度
+// 剩余部分为 ActionName字符串 + 数据Body
 type BeginEndMarkReceiveFilter struct {
 	Begin []byte
 	End   []byte
