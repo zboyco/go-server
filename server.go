@@ -24,7 +24,7 @@ type Server struct {
 	IdleSessionTimeOut int // 客户端空闲超时时间(秒)，默认300s,<=0则不设置超时
 
 	onError              func(error)               // 错误方法
-	onMessage            func(*AppSession, []byte) // 接收到新消息
+	onMessage            ActionFunc                // 接收到新消息
 	onNewSessionRegister func(*AppSession)         // 新客户端接入
 	onSessionClosed      func(*AppSession, string) // 客户端关闭通知
 
@@ -205,7 +205,7 @@ func (server *Server) SetSplitFunc(splitFunc bufio.SplitFunc) {
 }
 
 // SetOnMessage 设置接收到新消息处理方法
-func (server *Server) SetOnMessage(onMessageFunc func(*AppSession, []byte)) {
+func (server *Server) SetOnMessage(onMessageFunc ActionFunc) {
 	server.onMessage = onMessageFunc
 }
 

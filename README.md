@@ -40,13 +40,14 @@ func main() {
 }
 
 // 接收数据方法
-func onMessage(client *goserver.AppSession, token []byte) {
+func onMessage(client *goserver.AppSession, token []byte) ([]byte, error) {
 	// 将bytes转为字符串
 	result := string(token)
 	// 输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
 	// 发送给客户端
-	client.Send([]byte("Got!"))
+	// client.Send([]byte("Got!"))
+	return []byte("Got!"), nil
 }
 ```
 ## 使用tls
@@ -92,13 +93,14 @@ func main() {
 }
 
 // 接收数据方法
-func onMessage(client *goserver.AppSession, token []byte) {
+func onMessage(client *goserver.AppSession, token []byte) ([]byte, error) {
 	// 将bytes转为字符串
 	result := string(token)
 	// 输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
 	// 发送给客户端
-	client.Send([]byte("Got!"))
+	// client.Send([]byte("Got!"))
+	return []byte("Got!"), nil
 }
 ```
 ## 使用命令路由方式调用方法
@@ -128,13 +130,14 @@ func main() {
 	mainServer.SetOnError(onError)
 
 	// 添加单个Action
-	err := mainServer.Action("/test", func(client *goserver.AppSession, msg []byte) {
+	err := mainServer.Action("/test", func(client *goserver.AppSession, msg []byte) ([]byte, error) {
 		// 将bytes转为字符串
 		result := string(msg)
 		// 输出结果
 		log.Println("单独添加Action 接收到客户[", client.ID, "]数据:", result)
 		// 发送给客户端
-		client.Send([]byte("Got!"))
+		// client.Send([]byte("Got!"))
+		return []byte("Got!"), nil
 	})
 
 	// 使用模块注册Action
@@ -164,13 +167,14 @@ func (m *module) Root() string {
 // 定义命令
 // 注意方法名要以大写字母开头
 // 调用路径即 /v1/Say
-func (m *module) Say(client *goserver.AppSession, token []byte) {
+func (m *module) Say(client *goserver.AppSession, token []byte) ([]byte, error) {
 	//将bytes转为字符串
 	result := string(token)
 	//输出结果
 	log.Println("Say方法 接收到客户[", client.ID, "]数据:", result)
 	// 发送给客户端
-	client.Send([]byte("Got!"))
+	// client.Send([]byte("Got!"))
+	return []byte("Got!"), nil
 }
 ```
 client端:

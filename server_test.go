@@ -129,7 +129,7 @@ func BenchmarkSocket(b *testing.B) {
 }
 
 // 接收数据方法
-func onMessage(client *goserver.AppSession, bytes []byte) {
+func onMessage(client *goserver.AppSession, bytes []byte) ([]byte, error) {
 	//将bytes转为字符串
 	result := string(bytes)
 
@@ -137,6 +137,7 @@ func onMessage(client *goserver.AppSession, bytes []byte) {
 	log.Println("接收到客户端[", client.ID, "]数据:", result)
 
 	// client.Send([]byte("Got!"))
+	return []byte("Got!"), nil
 }
 
 // 接收错误方法
