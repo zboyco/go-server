@@ -210,6 +210,56 @@ func SendByBeginEndMark(conn net.Conn, msg string) error {
 }
 ```
 
+## 中间件  
+goserver主体和ActionModule可以注册使用中间件，各自有before和after两个事件，都是相对于实际的action。如下：
+goserver主体，直接使用方法注册
+```go
+	mainServer.RegisterBeforeMiddlewares(goserver.Middlewares{
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-before1-"), nil
+		},
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-before2-"), nil
+		},
+	})
+
+	mainServer.RegisterAfterMiddlewares(goserver.Middlewares{
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-after3-"), nil
+		},
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-after4-"), nil
+		},
+	})
+```
+ActionModule，通过实现`MiddlewaresBeforeAction`或`MiddlewaresAfterAction`接口注册
+```go
+func (m *otherModule) MiddlewaresBeforeAction() goserver.Middlewares {
+	return goserver.Middlewares{
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-before3-"), nil
+		},
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-before4-"), nil
+		},
+	}
+}
+
+func (m *otherModule) MiddlewaresAfterAction() goserver.Middlewares {
+	return goserver.Middlewares{
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-after1-"), nil
+		},
+		func(client *goserver.AppSession, token []byte) ([]byte, error) {
+			return []byte(string(token) + "-after2-"), nil
+		},
+	}
+}
+```
+
+总执行顺序是 `server.before` -> `module.before` -> action -> `module.after` -> `server.after`
+
+
 # 包结构介绍
 ## Server 服务
 `Server`是一个go-server的基本结构，可以理解为一个`Server`就是一个socket服务，提供如下方法： 
