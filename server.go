@@ -72,12 +72,23 @@ func (server *Server) Start() {
 
 	var tcpListener net.Listener
 	var err error
+
 	addr := fmt.Sprintf("%s:%d", server.ip, server.port)
+	if server.ip != "" && server.ip != "localhost" {
+		ipAddr := net.ParseIP(server.ip)
+		if ipAddr == nil {
+			log.Println("ip地址不正确!", server.ip)
+			return
+		}
+		if ipAddr.To4() == nil {
+			addr = fmt.Sprintf("[%s]:%d", server.ip, server.port)
+		}
+	}
 	// 监听端口
 	if server.tlsConfig == nil {
-		tcpListener, err = net.Listen("tcp4", addr)
+		tcpListener, err = net.Listen("tcp", addr)
 	} else {
-		tcpListener, err = tls.Listen("tcp4", addr, server.tlsConfig)
+		tcpListener, err = tls.Listen("tcp", addr, server.tlsConfig)
 	}
 	if err != nil {
 		log.Println("监听出错, ", err)
