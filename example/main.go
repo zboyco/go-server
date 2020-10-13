@@ -17,22 +17,22 @@ func main() {
 	mainServer.IdleSessionTimeOut = 10
 
 	// 根据协议定义拆包规则
-	//mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
-	//	if atEOF {
-	//		return 0, nil, nil
-	//	}
-	//	if data[0] != '$' || data[3] != '#' {
-	//		return 0, nil, errors.New("数据异常")
-	//	}
-	//	if len(data) > 4 {
-	//		length := int16(0)
-	//		binary.Read(bytes.NewReader(data[1:3]), binary.BigEndian, &length)
-	//		if int(length)+4 <= len(data) {
-	//			return int(length) + 4, data[4 : int(length)+4], nil
-	//		}
-	//	}
-	//	return 0, nil, nil
-	//})
+	// mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
+	// 	if atEOF {
+	// 		return 0, nil, nil
+	// 	}
+	// 	if data[0] != '$' || data[3] != '#' {
+	// 		return 0, nil, errors.New("数据异常")
+	// 	}
+	// 	if len(data) > 4 {
+	// 		length := int16(0)
+	// 		binary.Read(bytes.NewReader(data[1:3]), binary.BigEndian, &length)
+	// 		if int(length)+4 <= len(data) {
+	// 			return int(length) + 4, data[4 : int(length)+4], nil
+	// 		}
+	// 	}
+	// 	return 0, nil, nil
+	// })
 
 	mainServer.SetReceiveFilter(&goserver.BeginEndMarkReceiveFilter{
 		Begin: []byte{'!', '$'},
@@ -84,7 +84,7 @@ func main() {
 	}
 
 	// 注册OnMessage事件
-	//mainServer.SetOnMessage(onMessage)
+	mainServer.SetOnMessage(onMessage)
 	// 注册OnError事件
 	mainServer.SetOnError(onError)
 
@@ -108,15 +108,15 @@ func main() {
 }
 
 // 接收数据方法
-// func onMessage(client *goserver.AppSession, token []byte) {
-// 	// 将bytes转为字符串
-// 	result := string(token)
+func onMessage(client *goserver.AppSession, token []byte) ([]byte, error) {
+	// 将bytes转为字符串
+	result := string(token)
 
-// 	// 输出结果
-// 	log.Println("接收到客户[", client.ID, "]数据:", result)
-// 	// 发送给客户端
-// 	client.Send([]byte("Got!"))
-// }
+	// 输出结果
+	log.Println("接收到客户[", client.ID, "]数据:", result)
+	// 发送给客户端
+	return []byte("Got!"), nil
+}
 
 // 接收错误方法
 func onError(err error) {

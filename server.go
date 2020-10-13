@@ -24,7 +24,6 @@ type Server struct {
 	IdleSessionTimeOut int // 客户端空闲超时时间(秒)，默认300s,<=0则不设置超时
 
 	onError              func(error)               // 错误方法
-	onMessage            ActionFunc                // 接收到新消息
 	onNewSessionRegister func(*AppSession)         // 新客户端接入
 	onSessionClosed      func(*AppSession, string) // 客户端关闭通知
 
@@ -63,8 +62,8 @@ func (server *Server) Start() {
 		server.splitFunc = bufio.ScanLines
 	}
 
-	if server.onMessage == nil && server.resolveAction == nil {
-		log.Println("error: no message handle function")
+	if len(server.actions) == 0 {
+		log.Println("error: no message action")
 		return
 	}
 
@@ -165,23 +164,20 @@ func (server *Server) handleClient(conn net.Conn) {
 		if server.IdleSessionTimeOut > 0 {
 			err = session.conn.SetReadDeadline(time.Now().Add(server.idleSessionTimeOutDuration))
 			if err != nil {
-				server.handleOnError(err)
 				break
 			}
 		}
+		token := scanner.Bytes()
+		actionName := ""
 		if server.resolveAction != nil {
-			actionName, msg, resolveErr := server.resolveAction(scanner.Bytes())
-			if resolveErr != nil {
-				server.handleOnError(resolveErr)
-				err = resolveErr
+			actionName, token, err = server.resolveAction(token)
+			if err != nil {
 				break
 			}
-			hookErr := server.hookAction(actionName, session, msg)
-			if hookErr != nil {
-				server.handleOnError(hookErr)
-			}
-		} else {
-			server.onMessage(session, scanner.Bytes())
+		}
+		hookErr := server.hookAction(actionName, session, token)
+		if hookErr != nil {
+			server.handleOnError(hookErr)
 		}
 	}
 
@@ -190,6 +186,7 @@ func (server *Server) handleClient(conn net.Conn) {
 		err = scanner.Err()
 	}
 	if err != nil {
+		server.handleOnError(err)
 		server.closeSession(session, err.Error())
 		return
 	}
@@ -217,7 +214,7 @@ func (server *Server) SetSplitFunc(splitFunc bufio.SplitFunc) {
 
 // SetOnMessage 设置接收到新消息处理方法
 func (server *Server) SetOnMessage(onMessageFunc ActionFunc) {
-	server.onMessage = onMessageFunc
+	server.actions[""] = []ActionFunc{onMessageFunc}
 }
 
 // SetOnError 设置接收到错误处理方法

@@ -41,18 +41,12 @@ func (server *Server) RegisterModule(m ActionModule) error {
 		if temFunc, ok := tem.(func(*AppSession, []byte) ([]byte, error)); ok {
 			funcName := fmt.Sprintf("%s/%s", prefix, mType.Method(i).Name)
 			actions := make([]ActionFunc, 0)
-			if server.middlewaresBefore != nil {
-				actions = server.middlewaresBefore
-			}
 			if beforeAction != nil {
 				actions = append(actions, beforeAction...)
 			}
 			actions = append(actions, temFunc)
 			if afterAction != nil {
 				actions = append(actions, afterAction...)
-			}
-			if server.middlewaresAfter != nil {
-				actions = append(actions, server.middlewaresAfter...)
 			}
 			err := server.Action(strings.ToLower(funcName), actions...)
 			if err != nil {
@@ -71,10 +65,26 @@ func (server *Server) hookAction(funcName string, session *AppSession, token []b
 		return ActionNotFoundError
 	}
 	var err error
+	if server.middlewaresBefore != nil {
+		for i := range server.middlewaresBefore {
+			token, err = server.middlewaresBefore[i](session, token)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	for i := range actions {
 		token, err = actions[i](session, token)
 		if err != nil {
 			return err
+		}
+	}
+	if server.middlewaresAfter != nil {
+		for i := range server.middlewaresAfter {
+			token, err = server.middlewaresAfter[i](session, token)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	if token != nil {

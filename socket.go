@@ -33,6 +33,8 @@ type BeginEndMarkReceiveFilter struct {
 
 // SplitFunc 返回拆包函数
 func (s *BeginEndMarkReceiveFilter) SplitFunc() bufio.SplitFunc {
+	beginLength := len(s.Begin)
+	endLength := len(s.End)
 	return func(data []byte, atEOF bool) (int, []byte, error) {
 		if atEOF {
 			return 0, nil, nil
@@ -49,9 +51,8 @@ func (s *BeginEndMarkReceiveFilter) SplitFunc() bufio.SplitFunc {
 		if start > end {
 			return 0, nil, errors.New("数据异常")
 		}
-		beginLength := len(s.Begin)
 		packageLength := end - start - beginLength
-		return packageLength + beginLength + len(s.End), data[beginLength : beginLength+packageLength], nil
+		return packageLength + beginLength + endLength, data[beginLength : beginLength+packageLength], nil
 	}
 }
 
