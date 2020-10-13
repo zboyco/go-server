@@ -27,6 +27,7 @@ type Server struct {
 	onNewSessionRegister func(*AppSession)         // 新客户端接入
 	onSessionClosed      func(*AppSession, string) // 客户端关闭通知
 
+	connectionFilter  []ConnectionFilter                                            // 连接过滤器
 	splitFunc         bufio.SplitFunc                                               // 拆包规则
 	resolveAction     func(token []byte) (actionName string, msg []byte, err error) // 解析请求方法
 	middlewaresBefore Middlewares                                                   // action执行前中间件
@@ -125,6 +126,17 @@ func (server *Server) Start() {
 
 // handleClient 读取数据
 func (server *Server) handleClient(conn net.Conn) {
+	// 连接过滤器
+	if server.connectionFilter != nil {
+		for i := range server.connectionFilter {
+			if err := server.connectionFilter[i](conn); err != nil {
+				log.Printf("connect[%s] filter because %s", conn.RemoteAddr(), err.Error())
+				_ = conn.Close()
+				return
+			}
+		}
+	}
+
 	// 创建会话对象
 	session := &AppSession{
 		ID:   uuid.NewV4().String(),
@@ -230,6 +242,11 @@ func (server *Server) SetOnNewSessionRegister(onNewSessionRegisterFunc func(*App
 // SetOnSessionClosed 设置会话关闭时处理方法
 func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(*AppSession, string)) {
 	server.onSessionClosed = onSessionClosedFunc
+}
+
+// RegisterConnectionFilter 注册连接过滤器
+func (server *Server) RegisterConnectionFilter(connectionFilter ...ConnectionFilter) {
+	server.connectionFilter = connectionFilter
 }
 
 // RegisterBeforeMiddlewares 注册aciton前中间件

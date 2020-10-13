@@ -398,4 +398,7 @@ DelAttr(key string) error
     实现获取所有会话方法（返回会话channel）  
     实现通过属性获取会话方法（返回会话channel）  
     包名修改为`goserver`,发布第一个`tag`  
-    增加命令路由单个注册方法`Action`
+    增加命令路由单个注册方法`Action`  
+18. [实现连接过滤器和数据中间件](https://github.com/zboyco/go-server)  
+	> 实现连接过滤器，过滤器返回错误则会立即断开连接  
+	增加数据中间件，分为服务中间件和模块中间件，各有before和after两个时间点，执行顺序为 `server.before`->`module.before`->`action`->`module.after`->`server.after`

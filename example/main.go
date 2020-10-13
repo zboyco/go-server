@@ -16,6 +16,11 @@ func main() {
 	// 设置会话闲置超时时间，为0则不超时
 	mainServer.IdleSessionTimeOut = 10
 
+	// mainServer.RegisterConnectionFilter(func(conn net.Conn) error {
+	// 	log.Println("连接", conn.RemoteAddr().String())
+	// 	return errors.New("test filter")
+	// })
+
 	// 根据协议定义拆包规则
 	// mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
 	// 	if atEOF {
