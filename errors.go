@@ -3,7 +3,7 @@ package goserver
 import "errors"
 
 var (
-	PathFormatError     error = errors.New("path must start with \"/\"")
-	ActionNotFoundError error = errors.New("action not exist")
-	ActionConflictError error = errors.New("action register conflict")
+	ErrPathFormat     error = errors.New("path must start with \"/\"")
+	ErrActionNotFound error = errors.New("action not exist")
+	ErrActionConflict error = errors.New("action register conflict")
 )

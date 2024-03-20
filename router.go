@@ -62,7 +62,7 @@ func (server *Server) hookAction(funcName string, session *AppSession, token []b
 	funcName = strings.ToLower(funcName)
 	actions, exist := server.actions[funcName]
 	if !exist {
-		return ActionNotFoundError
+		return ErrActionNotFound
 	}
 	var err error
 	if server.middlewaresBefore != nil {
@@ -96,10 +96,10 @@ func (server *Server) hookAction(funcName string, session *AppSession, token []b
 // Action 添加单个Action
 func (server *Server) Action(path string, actionFunc ...ActionFunc) error {
 	if path == "" || path[0] != '/' {
-		return PathFormatError
+		return ErrPathFormat
 	}
 	if _, exist := server.actions[path]; exist {
-		return ActionConflictError
+		return ErrActionConflict
 	}
 	server.actions[path] = actionFunc
 	return nil
