@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"sync"
 
 	"github.com/pkg/errors"
 	goserver "github.com/zboyco/go-server"
@@ -16,9 +15,9 @@ type BeginEndMarkClient struct {
 	*goserver.BeginEndMarkReceiveFilter
 
 	scanner *bufio.Scanner
-	sync.Mutex
 }
 
+// NewBeginEndMarkClient 新建一个开始结束标记的tcp客户端
 func NewBeginEndMarkClient(ip string, port int, filter *goserver.BeginEndMarkReceiveFilter) *BeginEndMarkClient {
 	return &BeginEndMarkClient{
 		SimpleClient:              SimpleClient{ip: ip, port: port},
@@ -26,6 +25,7 @@ func NewBeginEndMarkClient(ip string, port int, filter *goserver.BeginEndMarkRec
 	}
 }
 
+// Connect 连接
 func (client *BeginEndMarkClient) Connect() error {
 	if client.BeginEndMarkReceiveFilter == nil {
 		return errors.New("BeginEndMarkReceiveFilter is nil")
@@ -33,24 +33,12 @@ func (client *BeginEndMarkClient) Connect() error {
 	return client.SimpleClient.Connect()
 }
 
+// Send 发送
 func (client *BeginEndMarkClient) Send(content []byte) error {
-	_, err := client.conn.Write(client.Begin)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.conn.Write(content)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.conn.Write(client.End)
-	if err != nil {
-		return err
-	}
-	return nil
+	return client.SimpleClient.Send(bytes.Join([][]byte{client.Begin, content, client.End}, nil))
 }
 
+// SendAction 发送action
 func (client *BeginEndMarkClient) SendAction(actionPath string, content []byte) error {
 	headBytes := make([]byte, 4)
 
@@ -61,6 +49,7 @@ func (client *BeginEndMarkClient) SendAction(actionPath string, content []byte) 
 	return client.Send(bytes.Join([][]byte{headBytes, []byte(actionPath), content}, nil))
 }
 
+// Receive 接收
 func (client *BeginEndMarkClient) Receive() ([]byte, error) {
 	client.Lock()
 	defer client.Unlock()
