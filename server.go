@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 )
 
 // Server 服务结构
@@ -139,7 +139,7 @@ func (server *Server) handleClient(conn net.Conn) {
 
 	// 创建会话对象
 	session := &AppSession{
-		ID:   uuid.NewV4().String(),
+		ID:   uuid.NewString(),
 		conn: conn,
 		attr: make(map[string]interface{}),
 	}
