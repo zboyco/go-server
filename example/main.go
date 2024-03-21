@@ -6,6 +6,7 @@ import (
 	"time"
 
 	goserver "github.com/zboyco/go-server"
+	"github.com/zboyco/go-server/filter"
 )
 
 func main() {
@@ -39,7 +40,7 @@ func main() {
 	// 	return 0, nil, nil
 	// })
 
-	mainServer.SetReceiveFilter(&goserver.BeginEndMarkReceiveFilter{
+	mainServer.SetReceiveFilter(&filter.BeginEndMarkReceiveFilter{
 		Begin: []byte{'!', '$'},
 		End:   []byte{'$', '!'},
 	})

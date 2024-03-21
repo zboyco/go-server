@@ -9,9 +9,10 @@ import (
 )
 
 type SimpleClient struct {
-	ip   string
-	port int
-	conn net.Conn // socket连接
+	ip         string
+	port       int
+	conn       net.Conn // socket连接
+	bufferSize int
 
 	sync.RWMutex
 }
@@ -22,6 +23,11 @@ func NewSimpleClient(ip string, port int) *SimpleClient {
 		ip:   ip,
 		port: port,
 	}
+}
+
+// SetBufferSize 设置缓冲区大小
+func (client *SimpleClient) SetBufferSize(bufferSize int) {
+	client.bufferSize = bufferSize
 }
 
 // Connect 连接
@@ -80,7 +86,12 @@ func (client *SimpleClient) Receive() ([]byte, error) {
 	client.RLock()
 	defer client.RUnlock()
 
-	var buf [1024]byte
+	var buf []byte
+	if client.bufferSize > 0 {
+		buf = make([]byte, client.bufferSize)
+	} else {
+		buf = make([]byte, 4*1024)
+	}
 	n, err := client.conn.Read(buf[:])
 	if err != nil {
 		return nil, err

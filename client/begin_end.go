@@ -7,22 +7,28 @@ import (
 	"io"
 
 	"github.com/pkg/errors"
-	goserver "github.com/zboyco/go-server"
+	"github.com/zboyco/go-server/filter"
 )
 
 type BeginEndMarkClient struct {
 	SimpleClient
-	*goserver.BeginEndMarkReceiveFilter
+	*filter.BeginEndMarkReceiveFilter
 
-	scanner *bufio.Scanner
+	scanner          *bufio.Scanner
+	maxScanTokenSize int
 }
 
 // NewBeginEndMarkClient 新建一个开始结束标记的tcp客户端
-func NewBeginEndMarkClient(ip string, port int, filter *goserver.BeginEndMarkReceiveFilter) *BeginEndMarkClient {
+func NewBeginEndMarkClient(ip string, port int, filter *filter.BeginEndMarkReceiveFilter) *BeginEndMarkClient {
 	return &BeginEndMarkClient{
 		SimpleClient:              SimpleClient{ip: ip, port: port},
 		BeginEndMarkReceiveFilter: filter,
 	}
+}
+
+// SetMaxScanTokenSize 设置数据最大长度
+func (client *BeginEndMarkClient) SetMaxScanTokenSize(size int) {
+	client.maxScanTokenSize = size
 }
 
 // Connect 连接
@@ -54,14 +60,36 @@ func (client *BeginEndMarkClient) Receive() ([]byte, error) {
 	client.RLock()
 	defer client.RUnlock()
 
-	if client.scanner == nil {
-		// 创建scanner
-		client.scanner = bufio.NewScanner(client.conn)
-		client.scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024) // 分配64KB的缓冲区，并设置最大令牌大小为1MB
+	func() {
+		if client.scanner == nil {
+			client.Lock()
+			defer client.Unlock()
 
-		// 设置分离函数
-		client.scanner.Split(client.BeginEndMarkReceiveFilter.SplitFunc())
-	}
+			if client.scanner != nil {
+				return
+			}
+
+			// 创建scanner
+			client.scanner = bufio.NewScanner(client.conn)
+			if client.bufferSize > 0 || client.maxScanTokenSize > 0 {
+				bufferSize := client.bufferSize
+				maxScanTokenSize := client.maxScanTokenSize
+				if bufferSize == 0 {
+					bufferSize = 4 * 1024
+				}
+				if maxScanTokenSize == 0 {
+					maxScanTokenSize = bufio.MaxScanTokenSize
+				}
+				if bufferSize > maxScanTokenSize {
+					maxScanTokenSize = bufferSize
+				}
+				client.scanner.Buffer(make([]byte, 0, bufferSize), maxScanTokenSize)
+			}
+
+			// 设置分离函数
+			client.scanner.Split(client.BeginEndMarkReceiveFilter.SplitFunc())
+		}
+	}()
 
 	// 获取数据
 	if !client.scanner.Scan() {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/zboyco/go-server/filter"
 )
 
 // Server 服务结构
@@ -27,9 +28,10 @@ type Server struct {
 	onNewSessionRegister func(*AppSession)         // 新客户端接入
 	onSessionClosed      func(*AppSession, string) // 客户端关闭通知
 
-	connectionFilter  []ConnectionFilter                                            // 连接过滤器
+	connectionFilter  []filter.ConnectionFilter                                     // 连接过滤器
 	splitFunc         bufio.SplitFunc                                               // 拆包规则
 	resolveAction     func(token []byte) (actionName string, msg []byte, err error) // 解析请求方法
+	maxScanTokenSize  int                                                           // 最大拆包大小
 	middlewaresBefore Middlewares                                                   // action执行前中间件
 	middlewaresAfter  Middlewares                                                   // action执行后中间件
 	actions           map[string][]ActionFunc                                       // 消息处理方法字典
@@ -177,6 +179,13 @@ func (server *Server) handleClient(conn net.Conn) {
 
 	// 创建scanner
 	scanner := bufio.NewScanner(session.conn)
+	if server.maxScanTokenSize > 0 {
+		if server.maxScanTokenSize > 4*1024 {
+			scanner.Buffer(make([]byte, 0, 4*1024), server.maxScanTokenSize)
+		} else {
+			scanner.Buffer(make([]byte, 0, server.maxScanTokenSize), server.maxScanTokenSize)
+		}
+	}
 
 	// 设置分离函数
 	scanner.Split(server.splitFunc)
@@ -244,6 +253,17 @@ func (server *Server) SetSplitFunc(splitFunc bufio.SplitFunc) {
 	server.splitFunc = splitFunc
 }
 
+// SetReceiveFilter 设置过滤器
+func (server *Server) SetReceiveFilter(s filter.ReceiveFilter) {
+	server.splitFunc = s.SplitFunc()
+	server.resolveAction = s.ResolveAction()
+}
+
+// SetMaxScanTokenSize 设置数据最大长度
+func (server *Server) SetMaxScanTokenSize(maxScanTokenSize int) {
+	server.maxScanTokenSize = maxScanTokenSize
+}
+
 // SetOnMessage 设置接收到新消息处理方法
 func (server *Server) SetOnMessage(onMessageFunc ActionFunc) {
 	server.actions[""] = []ActionFunc{onMessageFunc}
@@ -265,7 +285,7 @@ func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(*AppSession, s
 }
 
 // RegisterConnectionFilter 注册连接过滤器
-func (server *Server) RegisterConnectionFilter(connectionFilter ...ConnectionFilter) {
+func (server *Server) RegisterConnectionFilter(connectionFilter ...filter.ConnectionFilter) {
 	server.connectionFilter = connectionFilter
 }
 

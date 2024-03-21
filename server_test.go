@@ -13,6 +13,7 @@ import (
 
 	goserver "github.com/zboyco/go-server"
 	"github.com/zboyco/go-server/client"
+	"github.com/zboyco/go-server/filter"
 )
 
 type module struct{}
@@ -36,7 +37,7 @@ func BeginEndServer() {
 		mainServer := goserver.New("", 9044)
 		mainServer.IdleSessionTimeOut = 5
 
-		mainServer.SetReceiveFilter(&goserver.BeginEndMarkReceiveFilter{
+		mainServer.SetReceiveFilter(&filter.BeginEndMarkReceiveFilter{
 			Begin: []byte{'!', '$'},
 			End:   []byte{'$', '!'},
 		})
@@ -139,7 +140,7 @@ func TestSocket(t *testing.T) {
 	t.Run("begin-end socket", func(t *testing.T) {
 		BeginEndServer()
 		time.Sleep(3 * time.Second)
-		c := client.NewBeginEndMarkClient("", 9044, &goserver.BeginEndMarkReceiveFilter{
+		c := client.NewBeginEndMarkClient("", 9044, &filter.BeginEndMarkReceiveFilter{
 			Begin: []byte{'!', '$'},
 			End:   []byte{'$', '!'},
 		})
