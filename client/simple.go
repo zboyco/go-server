@@ -14,7 +14,7 @@ type SimpleClient struct {
 	conn       net.Conn // socket连接
 	bufferSize int
 
-	sync.RWMutex
+	sync.Mutex
 }
 
 // NewSimpleClient 新建一个tcp客户端
@@ -53,9 +53,6 @@ func (client *SimpleClient) Connect() error {
 
 // GetRawConn 获取原始连接
 func (client *SimpleClient) GetRawConn() net.Conn {
-	client.RLock()
-	defer client.RUnlock()
-
 	return client.conn
 }
 
@@ -75,17 +72,14 @@ func (client *SimpleClient) Close() error {
 
 // Send 发送
 func (client *SimpleClient) Send(content []byte) error {
-	client.RLock()
-	defer client.RUnlock()
-
+	if client.conn == nil {
+		return errors.New("conn is nil")
+	}
 	_, err := client.conn.Write(content)
 	return err
 }
 
 func (client *SimpleClient) Receive() ([]byte, error) {
-	client.RLock()
-	defer client.RUnlock()
-
 	var buf []byte
 	if client.bufferSize > 0 {
 		buf = make([]byte, client.bufferSize)
