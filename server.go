@@ -33,6 +33,8 @@ type Server struct {
 	middlewaresBefore Middlewares                                                   // action执行前中间件
 	middlewaresAfter  Middlewares                                                   // action执行后中间件
 	actions           map[string][]ActionFunc                                       // 消息处理方法字典
+
+	routers map[string][][]string // 用于启动时输出路由表
 }
 
 // New 新建一个tcp4服务
@@ -53,6 +55,8 @@ func NewWithTLS(ip string, port int, config *tls.Config) *Server {
 		actions:            make(map[string][]ActionFunc),
 		splitFunc:          bufio.ScanLines,
 		tlsConfig:          config,
+
+		routers: make(map[string][][]string),
 	}
 }
 
@@ -108,7 +112,6 @@ func (server *Server) Start() {
 		go func(acceptIndex int) {
 			defer wg.Done()
 			for {
-				log.Println("等待客户端连接...")
 				// 开始接收连接
 				conn, err := tcpListener.Accept()
 				if err != nil {
@@ -121,7 +124,24 @@ func (server *Server) Start() {
 			}
 		}(i)
 	}
+
+	server.printServerInfo()
+
 	wg.Wait()
+}
+
+func (server *Server) printServerInfo() {
+	for k, v := range server.routers {
+		fmt.Printf("[GO-SERVER] Source %s\n", k)
+		for _, action := range v {
+			fmt.Printf("[GO-SERVER]        %s", action[0])
+			if action[1] != "" {
+				fmt.Printf("   ==>   %s", action[1])
+			}
+			fmt.Print("\n")
+		}
+	}
+	fmt.Printf("[GO-SERVER] Listen on %s:%d\n\n", server.ip, server.port)
 }
 
 // handleClient 读取数据

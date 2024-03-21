@@ -125,22 +125,25 @@ func onMessage(client *goserver.AppSession, token []byte) ([]byte, error) {
 
 // 接收错误方法
 func onError(err error) {
-	//输出结果
+	// 输出结果
 	log.Println("错误: ", err)
 }
 
-type module struct {
-}
+type module struct{}
 
 func (m *module) Root() string {
 	return "/"
 }
 
+func (m *module) Summary() string {
+	return "这个是模块的摘要信息"
+}
+
 func (m *module) Say(client *goserver.AppSession, token []byte) ([]byte, error) {
-	//将bytes转为字符串
+	// 将bytes转为字符串
 	result := string(token)
 
-	//输出结果
+	// 输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
 
 	return token, nil
@@ -155,10 +158,10 @@ func (m *otherModule) Root() string {
 }
 
 func (m *otherModule) Print(client *goserver.AppSession, token []byte) ([]byte, error) {
-	//将bytes转为字符串
+	// 将bytes转为字符串
 	result := string(token)
 
-	//输出结果
+	// 输出结果
 	log.Println("接收到客户[", client.ID, "]数据:", result)
 
 	return []byte(result + m.name), nil
