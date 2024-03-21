@@ -13,7 +13,7 @@ type SimpleClient struct {
 	port int
 	conn net.Conn // socket连接
 
-	sync.Mutex
+	sync.RWMutex
 }
 
 // NewSimpleClient 新建一个tcp客户端
@@ -47,8 +47,8 @@ func (client *SimpleClient) Connect() error {
 
 // GetRawConn 获取原始连接
 func (client *SimpleClient) GetRawConn() net.Conn {
-	client.Lock()
-	defer client.Unlock()
+	client.RLock()
+	defer client.RUnlock()
 
 	return client.conn
 }
@@ -69,16 +69,16 @@ func (client *SimpleClient) Close() error {
 
 // Send 发送
 func (client *SimpleClient) Send(content []byte) error {
-	client.Lock()
-	defer client.Unlock()
+	client.RLock()
+	defer client.RUnlock()
 
 	_, err := client.conn.Write(content)
 	return err
 }
 
 func (client *SimpleClient) Receive() ([]byte, error) {
-	client.Lock()
-	defer client.Unlock()
+	client.RLock()
+	defer client.RUnlock()
 
 	var buf [1024]byte
 	n, err := client.conn.Read(buf[:])

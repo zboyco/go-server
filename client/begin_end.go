@@ -51,8 +51,8 @@ func (client *BeginEndMarkClient) SendAction(actionPath string, content []byte) 
 
 // Receive 接收
 func (client *BeginEndMarkClient) Receive() ([]byte, error) {
-	client.Lock()
-	defer client.Unlock()
+	client.RLock()
+	defer client.RUnlock()
 
 	if client.scanner == nil {
 		// 创建scanner
