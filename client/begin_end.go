@@ -57,6 +57,7 @@ func (client *BeginEndMarkClient) Receive() ([]byte, error) {
 	if client.scanner == nil {
 		// 创建scanner
 		client.scanner = bufio.NewScanner(client.conn)
+		client.scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024) // 分配64KB的缓冲区，并设置最大令牌大小为1MB
 
 		// 设置分离函数
 		client.scanner.Split(client.BeginEndMarkReceiveFilter.SplitFunc())
