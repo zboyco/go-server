@@ -6,15 +6,21 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/zboyco/go-server/filter"
+)
+
+type Network string
+
+const (
+	TCP Network = "tcp"
+	UDP Network = "udp"
 )
 
 // Server 服务结构
 type Server struct {
+	network                    Network       // 传输协议
 	ip                         string        // 服务器IP
 	port                       int           // 服务器端口
 	sessionSource              *sessionPool  // Session池
@@ -28,27 +34,25 @@ type Server struct {
 	onNewSessionRegister func(*AppSession)         // 新客户端接入
 	onSessionClosed      func(*AppSession, string) // 客户端关闭通知
 
-	connectionFilter  []filter.ConnectionFilter                                     // 连接过滤器
-	splitFunc         bufio.SplitFunc                                               // 拆包规则
-	resolveAction     func(token []byte) (actionName string, msg []byte, err error) // 解析请求方法
-	maxScanTokenSize  int                                                           // 最大拆包大小
-	middlewaresBefore Middlewares                                                   // action执行前中间件
-	middlewaresAfter  Middlewares                                                   // action执行后中间件
-	actions           map[string][]ActionFunc                                       // 消息处理方法字典
+	ioEOF               []byte                                                        // IO结束标记
+	connectionFilterTCP []filter.ConnectionFilterTCP                                  // TCP连接过滤器
+	connectionFilterUDP []filter.ConnectionFilterUDP                                  // UDP连接过滤器
+	splitFunc           bufio.SplitFunc                                               // 拆包规则
+	resolveAction       func(token []byte) (actionName string, msg []byte, err error) // 解析请求方法
+	maxScanTokenSize    int                                                           // 最大拆包大小
+	middlewaresBefore   Middlewares                                                   // action执行前中间件
+	middlewaresAfter    Middlewares                                                   // action执行后中间件
+	sendPacketFilter    Middlewares                                                   // 发送数据过滤
+	actions             map[string][]ActionFunc                                       // 消息处理方法字典
 
 	routers map[string][][]string // 用于启动时输出路由表
 }
 
-// New 新建一个tcp4服务
-func New(ip string, port int) *Server {
-	return NewWithTLS(ip, port, nil)
-}
-
-// NewWithTLS 新建一个tls加密服务
-func NewWithTLS(ip string, port int, config *tls.Config) *Server {
+func newServer(network Network, ip string, port int, config *tls.Config) *Server {
 	return &Server{
-		ip:   ip,
-		port: port,
+		network: network,
+		ip:      ip,
+		port:    port,
 		sessionSource: &sessionPool{
 			list: make(chan *sessionHandle, 100),
 		},
@@ -76,9 +80,6 @@ func (server *Server) Start() {
 
 	server.idleSessionTimeOutDuration = time.Duration(server.IdleSessionTimeOut) * time.Second
 
-	var tcpListener net.Listener
-	var err error
-
 	addr := fmt.Sprintf("%s:%d", server.ip, server.port)
 	if server.ip != "" && server.ip != "localhost" {
 		ipAddr := net.ParseIP(server.ip)
@@ -90,46 +91,16 @@ func (server *Server) Start() {
 			addr = fmt.Sprintf("[%s]:%d", server.ip, server.port)
 		}
 	}
-	// 监听端口
-	if server.tlsConfig == nil {
-		tcpListener, err = net.Listen("tcp", addr)
-	} else {
-		tcpListener, err = tls.Listen("tcp", addr, server.tlsConfig)
-	}
-	if err != nil {
-		log.Println("监听出错, ", err)
-		server.handleOnError(err)
+
+	switch server.network {
+	case TCP:
+		server.startTCP(addr)
+	case UDP:
+		server.startUDP(addr)
+	default:
+		log.Println("未知的传输协议：", server.network)
 		return
 	}
-
-	// 程序返回后关闭socket
-	defer tcpListener.Close()
-
-	// 开启会话池管理
-	go server.sessionSource.sessionPoolManager()
-
-	var wg sync.WaitGroup
-	for i := 0; i < server.AcceptCount; i++ {
-		wg.Add(1)
-		go func(acceptIndex int) {
-			defer wg.Done()
-			for {
-				// 开始接收连接
-				conn, err := tcpListener.Accept()
-				if err != nil {
-					log.Println("客户端连接失败, ", err)
-					server.handleOnError(err)
-					continue
-				}
-				// 启用goroutine处理
-				go server.handleClient(conn)
-			}
-		}(i)
-	}
-
-	server.printServerInfo()
-
-	wg.Wait()
 }
 
 func (server *Server) printServerInfo() {
@@ -146,94 +117,6 @@ func (server *Server) printServerInfo() {
 	fmt.Printf("[GO-SERVER] Listen on %s:%d\n\n", server.ip, server.port)
 }
 
-// handleClient 读取数据
-func (server *Server) handleClient(conn net.Conn) {
-	// 连接过滤器
-	if server.connectionFilter != nil {
-		for i := range server.connectionFilter {
-			if err := server.connectionFilter[i](conn); err != nil {
-				log.Printf("connect[%s] filter because %s", conn.RemoteAddr(), err.Error())
-				_ = conn.Close()
-				return
-			}
-		}
-	}
-
-	// 创建会话对象
-	session := &AppSession{
-		ID:   uuid.NewString(),
-		conn: conn,
-		attr: make(map[string]interface{}),
-	}
-	// 获取连接地址
-	remoteAddr := session.conn.RemoteAddr()
-	log.Println("客户端[", session.ID, "]地址:", remoteAddr)
-
-	// 新客户端接入通知
-	if server.onNewSessionRegister != nil {
-		server.onNewSessionRegister(session)
-	}
-
-	// 注册Session
-	server.sessionSource.addSession(session)
-
-	// 创建scanner
-	scanner := bufio.NewScanner(session.conn)
-	if server.maxScanTokenSize > 0 {
-		if server.maxScanTokenSize > 4*1024 {
-			scanner.Buffer(make([]byte, 0, 4*1024), server.maxScanTokenSize)
-		} else {
-			scanner.Buffer(make([]byte, 0, server.maxScanTokenSize), server.maxScanTokenSize)
-		}
-	}
-
-	// 设置分离函数
-	scanner.Split(server.splitFunc)
-
-	// 设置闲置超时时间
-	if server.IdleSessionTimeOut > 0 {
-		err := session.conn.SetReadDeadline(time.Now().Add(server.idleSessionTimeOutDuration))
-		if err != nil {
-			log.Println(err)
-		}
-	}
-
-	var err error
-	// 获取数据
-	for scanner.Scan() {
-		// 设置闲置超时时间
-		if server.IdleSessionTimeOut > 0 {
-			err = session.conn.SetReadDeadline(time.Now().Add(server.idleSessionTimeOutDuration))
-			if err != nil {
-				break
-			}
-		}
-		token := scanner.Bytes()
-		actionName := ""
-		if server.resolveAction != nil {
-			actionName, token, err = server.resolveAction(token)
-			if err != nil {
-				break
-			}
-		}
-		hookErr := server.hookAction(actionName, session, token)
-		if hookErr != nil {
-			server.handleOnError(hookErr)
-		}
-	}
-
-	// 错误处理
-	if err == nil {
-		err = scanner.Err()
-	}
-	if err != nil {
-		server.handleOnError(err)
-		server.closeSession(session, err.Error())
-		return
-	}
-	server.closeSession(session, "EOF")
-}
-
 func (server *Server) handleOnError(err error) {
 	log.Println(err)
 	if server.onError != nil {
@@ -243,9 +126,19 @@ func (server *Server) handleOnError(err error) {
 
 // closeSession 关闭session
 func (server *Server) closeSession(session *AppSession, reason string) {
+	// 如果设置了ioEOF，尝试发送
+	if len(server.ioEOF) != 0 {
+		_ = session.Send(server.ioEOF)
+	}
 	go session.Close(reason)
 	// 从池中移除
 	go server.sessionSource.deleteSession(session)
+}
+
+// SetEOF 设置IO结束标记
+// 设置后，服务器关闭客户端时，会尝试发送此标记
+func (server *Server) SetEOF(ioEOF []byte) {
+	server.ioEOF = ioEOF
 }
 
 // SetSplitFunc 设置数据拆包方法
@@ -284,9 +177,19 @@ func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(*AppSession, s
 	server.onSessionClosed = onSessionClosedFunc
 }
 
-// RegisterConnectionFilter 注册连接过滤器
-func (server *Server) RegisterConnectionFilter(connectionFilter ...filter.ConnectionFilter) {
-	server.connectionFilter = connectionFilter
+// RegisterConnectionFilterTCP 注册TCP连接过滤器
+func (server *Server) RegisterConnectionFilterTCP(connectionFilter ...filter.ConnectionFilterTCP) {
+	server.connectionFilterTCP = connectionFilter
+}
+
+// RegisterConnectionFilterUDP 注册UDP连接过滤器
+func (server *Server) RegisterConnectionFilterUDP(connectionFilter ...filter.ConnectionFilterUDP) {
+	server.connectionFilterUDP = connectionFilter
+}
+
+// RegisterSendPacketFilter 注册发送数据包过滤器
+func (server *Server) RegisterSendPacketFilter(mids Middlewares) {
+	server.sendPacketFilter = mids
 }
 
 // RegisterBeforeMiddlewares 注册aciton前中间件

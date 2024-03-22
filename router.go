@@ -99,7 +99,7 @@ func (server *Server) hookAction(funcName string, session *AppSession, token []b
 		}
 	}
 	if token != nil {
-		session.Send(token)
+		return session.Send(token)
 	}
 	return nil
 }

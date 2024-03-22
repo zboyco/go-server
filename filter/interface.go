@@ -5,8 +5,12 @@ import (
 	"net"
 )
 
-// ConnectionFilter 连接过滤器
-type ConnectionFilter func(net.Conn) error
+type (
+	// ConnectionFilterTCP TCP连接过滤器
+	ConnectionFilterTCP func(net.Conn) error
+	// ConnectionFilterUDP UDP连接过滤器
+	ConnectionFilterUDP func(*net.UDPAddr) error
+)
 
 // ResolveActionFunc 解析数据返回actionName和message
 type ResolveActionFunc func(token []byte) (actionName string, msg []byte, err error)

@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// 新建服务
-	mainServer := goserver.New("", 9043)
+	mainServer := goserver.New(goserver.TCP, "", 9043)
 	// 设置Socket接收协程数量
 	// mainServer.AcceptCount = 10
 	// 设置会话闲置超时时间，为0则不超时
@@ -105,7 +105,7 @@ func main() {
 				if !ok {
 					break
 				}
-				session.Send([]byte(fmt.Sprintf("server to client [%v]: %v", session.ID, counter)))
+				_ = session.Send([]byte(fmt.Sprintf("server to client [%v]: %v", session.ID, counter)))
 			}
 		}
 	}()

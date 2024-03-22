@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -32,9 +33,11 @@ func (m *module) Say(client *goserver.AppSession, token []byte) ([]byte, error) 
 	return token, nil
 }
 
-func BeginEndServer() {
+func BeginEndServer(network goserver.Network) {
 	go func() {
-		mainServer := goserver.New("", 9044)
+		mainServer := goserver.New(network, "", 9043)
+		mainServer.SetEOF([]byte("x$$io.EOF$$x"))
+
 		mainServer.IdleSessionTimeOut = 5
 
 		mainServer.SetReceiveFilter(&filter.BeginEndMarkReceiveFilter{
@@ -46,7 +49,7 @@ func BeginEndServer() {
 			log.Panic(err)
 		}
 
-		mainServer.RegisterAfterMiddlewares(goserver.Middlewares{
+		mainServer.RegisterSendPacketFilter(goserver.Middlewares{
 			func(as *goserver.AppSession, b []byte) ([]byte, error) {
 				return bytes.Join([][]byte{{'!', '$'}, b, {'$', '!'}}, nil), nil
 			},
@@ -62,7 +65,7 @@ func BeginEndServer() {
 
 func StartServer() {
 	go func() {
-		mainServer := goserver.New("", 9043)
+		mainServer := goserver.NewTCP("", 9043)
 		mainServer.IdleSessionTimeOut = 10
 
 		// 根据协议定义分离规则
@@ -138,12 +141,15 @@ func TestSocket(t *testing.T) {
 	})
 
 	t.Run("begin-end socket", func(t *testing.T) {
-		BeginEndServer()
+		BeginEndServer(goserver.TCP)
 		time.Sleep(3 * time.Second)
-		c := client.NewBeginEndMarkClient("", 9044, &filter.BeginEndMarkReceiveFilter{
+		filter := &filter.BeginEndMarkReceiveFilter{
 			Begin: []byte{'!', '$'},
 			End:   []byte{'$', '!'},
-		})
+		}
+		c := client.NewBeginEndMarkClient(goserver.TCP, "", 9043, filter)
+		// c.SetScannerSplitFunc(c.SplitFunc())
+
 		if err := c.Connect(); err != nil {
 			t.Fatal(err)
 		}
@@ -167,7 +173,52 @@ func TestSocket(t *testing.T) {
 					t.Error(err)
 					break
 				}
-				log.Println(string(result))
+				log.Println("接收到服务器数据:", string(result))
+			}
+		}(t)
+		wg.Wait()
+	})
+
+	t.Run("begin-end udp socket", func(t *testing.T) {
+		BeginEndServer(goserver.UDP)
+		time.Sleep(3 * time.Second)
+		filter := &filter.BeginEndMarkReceiveFilter{
+			Begin: []byte{'!', '$'},
+			End:   []byte{'$', '!'},
+		}
+		c := client.NewBeginEndMarkClient(goserver.UDP, "", 9043, filter)
+		c.SetScannerSplitFunc(c.SplitFunc())
+
+		if err := c.Connect(); err != nil {
+			t.Fatal(err)
+		}
+
+		var wg sync.WaitGroup
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 3; i++ {
+				_ = c.SendAction("/say", []byte("hello world"))
+				time.Sleep(1 * time.Second)
+			}
+		}()
+		wg.Add(1)
+		go func(t *testing.T) {
+			defer wg.Done()
+			for {
+				result, err := c.Receive()
+				if err != nil {
+					t.Error(err)
+					break
+				}
+
+				if string(result) == "x$$io.EOF$$x" {
+					t.Error(io.EOF)
+					break
+				}
+
+				log.Println("接收到服务器数据:", string(result))
 			}
 		}(t)
 		wg.Wait()
