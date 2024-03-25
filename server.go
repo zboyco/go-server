@@ -192,12 +192,12 @@ func (server *Server) RegisterSendPacketFilter(mids Middlewares) {
 	server.sendPacketFilter = mids
 }
 
-// RegisterBeforeMiddlewares 注册aciton前中间件
+// RegisterBeforeMiddlewares 注册action前置中间件
 func (server *Server) RegisterBeforeMiddlewares(mids Middlewares) {
 	server.middlewaresBefore = mids
 }
 
-// RegisterAfterMiddlewares 注册action后中间件
+// RegisterAfterMiddlewares 注册action后置中间件
 func (server *Server) RegisterAfterMiddlewares(mids Middlewares) {
 	server.middlewaresAfter = mids
 }

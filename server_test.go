@@ -35,7 +35,7 @@ func (m *module) Say(client *goserver.AppSession, token []byte) ([]byte, error) 
 
 func BeginEndServer(network goserver.Network) {
 	go func() {
-		mainServer := goserver.New(network, "", 9043)
+		mainServer := goserver.New(network, "", 8080)
 		mainServer.SetEOF([]byte("x$$io.EOF$$x"))
 
 		mainServer.IdleSessionTimeOut = 5
@@ -65,7 +65,7 @@ func BeginEndServer(network goserver.Network) {
 
 func StartServer() {
 	go func() {
-		mainServer := goserver.NewTCP("", 9043)
+		mainServer := goserver.NewTCP("", 8080)
 		mainServer.IdleSessionTimeOut = 10
 
 		// 根据协议定义分离规则
@@ -104,7 +104,7 @@ func TestSocket(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				tcpAddr, _ := net.ResolveTCPAddr("tcp4", ":9043")
+				tcpAddr, _ := net.ResolveTCPAddr("tcp4", ":8080")
 				conn, _ := net.DialTCP("tcp", nil, tcpAddr)
 
 				defer conn.Close()
@@ -147,7 +147,7 @@ func TestSocket(t *testing.T) {
 			Begin: []byte{'!', '$'},
 			End:   []byte{'$', '!'},
 		}
-		c := client.NewBeginEndMarkClient(goserver.TCP, "", 9043, filter)
+		c := client.NewBeginEndMarkClient(goserver.TCP, "", 8080, filter)
 		// c.SetScannerSplitFunc(c.SplitFunc())
 
 		if err := c.Connect(); err != nil {
@@ -186,7 +186,7 @@ func TestSocket(t *testing.T) {
 			Begin: []byte{'!', '$'},
 			End:   []byte{'$', '!'},
 		}
-		c := client.NewBeginEndMarkClient(goserver.UDP, "", 9043, filter)
+		c := client.NewBeginEndMarkClient(goserver.UDP, "", 8080, filter)
 		c.SetScannerSplitFunc(c.SplitFunc())
 
 		if err := c.Connect(); err != nil {
@@ -229,7 +229,7 @@ func BenchmarkSocket(b *testing.B) {
 	StartServer()
 
 	for i := 0; i < b.N; i++ {
-		tcpAddr, err := net.ResolveTCPAddr("tcp4", ":9043")
+		tcpAddr, err := net.ResolveTCPAddr("tcp4", ":8080")
 		if err != nil {
 			b.Fatalf("Fatal error: %s", err.Error())
 		}

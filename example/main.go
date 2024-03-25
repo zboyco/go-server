@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// 新建服务
-	mainServer := goserver.New(goserver.TCP, "", 9043)
+	mainServer := goserver.New(goserver.TCP, "", 8080)
 	// 设置Socket接收协程数量
 	// mainServer.AcceptCount = 10
 	// 设置会话闲置超时时间，为0则不超时

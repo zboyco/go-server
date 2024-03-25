@@ -4,7 +4,7 @@
 go-server 是我在学习golang的过程中，从最简单的socket一步一步改造形成的。  
 
 目前功能如下：  
-1. 普通的tcp功能（废话），支持ip4和ip6  
+1. 普通的socket功能，支持 tcp 和 udp，支持ip4和ip6  
 2. 使用标准库`bufio.Scanner`实现拆包，可以直接使用`bufio.Scanner`内置的拆包协议，当然也可以自定义拆包协议  
 3. 提供普通`OnMessage`和命令路由两种使用模式  
 4. 提供单个`Action`添加路由方法,同时也采用实现`ActionModule`接口的方式批量添加路由  
@@ -12,13 +12,13 @@ go-server 是我在学习golang的过程中，从最简单的socket一步一步�
 6. 支持设置会话超时时间，超时的会话会自动关闭  
 7. 提供会话查找方法，可以根据ID或自定义属性查找会话  
 8. 支持tls  
-9. ...  
+9. 提供简单的客户端实现[github.com/zboyco/go-server/client]
+10. ...  
 
 问题如下：  
-1. 目前只支持tcp协议
-2. ...原谅我不会写文档 (╥╯^╰╥)  
-3. 有什么问题大家随便留言  
-4. ...
+1. ...原谅我不会写文档 (╥╯^╰╥)  
+2. 有什么问题大家随便留言  
+3. ...
 
 # 使用方法
 ## 安装  
@@ -32,7 +32,7 @@ go get github.com/zboyco/go-server
 // main
 func main() {
 	// 新建服务
-	mainServer := goserver.New("", 9043)
+	mainServer := goserver.New(goserver.TCP, "", 8080)
 	// 注册OnMessage事件
 	mainServer.SetOnMessage(onMessage)
 	// 开启服务
@@ -58,7 +58,7 @@ func onMessage(client *goserver.AppSession, token []byte) ([]byte, error) {
 		log.Fatalln(err.Error())
 	}
 	// 新建服务
-	mainServer := goserver.NewWithTLS("", 9043, &tls.Config{
+	mainServer := goserver.NewWithTLS("", 8080, &tls.Config{
 		Certificates: []tls.Certificate{crt},
 	})
 ```
@@ -68,7 +68,7 @@ go-server 采用标准库`bufio.Scanner`实现数据拆包，默认使用`ScanLi
 ```go
 func main() {
 	// 新建服务
-	mainServer := goserver.New("", 9043)
+	mainServer := goserver.New(goserver.TCP, "", 8080)
 	// 根据协议定义拆包规则
 	mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
 		if atEOF {
@@ -109,7 +109,7 @@ func onMessage(client *goserver.AppSession, token []byte) ([]byte, error) {
 `ReceiveFilter`过滤器有两个方法,`splitFunc`负责拆包,`resolveAction`负责将每一个`package`解析成`ActionName`和`Message`两个部分;  
 
 `ActionModule`处理模块负责注册方法到go-server中,供go-server调用;
-> go-server 默认提供了两种常用的过滤器,分别为 `开始结束标记`和`固定头协议` 两种,也可以自定义过滤器,只需要实现`ReceiveFilter`接口即可，自定义过滤器的方法参考[socket.go文件](https://github.com/zboyco/go-server/blob/master/socket.go)    
+> go-server 默认提供了两种常用的过滤器,分别为 `开始结束标记`和`固定头协议` 两种,也可以自定义过滤器,只需要实现`filter.ReceiveFilter`接口即可，自定义过滤器的方法参考[begin_end.go文件](https://github.com/zboyco/go-server/blob/master/filter/begin_end.go)    
 > `ActionModule`模块可以注册多个,只要调用`模块根路径(Root)`+`方法名`没有重复即可，如有重复，在注册的时候会返回错误提示。  
 > 注意实现`ActionModule`模块的方法名要以大写字母开头  
 
@@ -118,14 +118,14 @@ server端:
 ```go
 func main() {
 	// 新建服务
-	mainServer := goserver.New("", 9043)
+	mainServer := goserver.New(goserver.TCP, "", 8080)
 	// 开始结束标记过滤器
-	mainServer.SetReceiveFilter(&go_server.BeginEndMarkReceiveFilter{
+	mainServer.SetReceiveFilter(&filter.BeginEndMarkReceiveFilter{
 		Begin: []byte{'!', '$'},
 		End:   []byte{'$', '!'},
 	})
 	// 固定头部协议过滤器
-	//mainServer.SetReceiveFilter(&goserver.FixedHeaderReceiveFilter{})
+	//mainServer.SetReceiveFilter(&filter.FixedHeaderReceiveFilter{})
 	// 注册OnError事件
 	mainServer.SetOnError(onError)
 
@@ -166,7 +166,7 @@ func (m *module) Root() string {
 
 // 定义命令
 // 注意方法名要以大写字母开头
-// 调用路径即 /v1/Say
+// 调用路径即 /v1/say
 func (m *module) Say(client *goserver.AppSession, token []byte) ([]byte, error) {
 	//将bytes转为字符串
 	result := string(token)
@@ -179,40 +179,53 @@ func (m *module) Say(client *goserver.AppSession, token []byte) ([]byte, error) 
 ```
 client端:
 ```go
-func SendByBeginEndMark(conn net.Conn, msg string) error {
-	begin := []byte{'!', '$'}
-	end := []byte{'$', '!'}
-	// 指定调用方法路径
-	actionName := []byte("/v1/Say")
+func SendByBeginEndMark(msg []byte) error {
+	filter := &filter.BeginEndMarkReceiveFilter{
+		Begin: []byte{'!', '$'},
+		End:   []byte{'$', '!'},
+	}
+	c := client.NewBeginEndMarkClient(goserver.TCP, "", 8080, filter)
 
-	var headBytes = make([]byte, 4)
-	
-	actionNameLength := len(actionName)
-	content := []byte(msg)
-	binary.BigEndian.PutUint32(headBytes, uint32(actionNameLength))
-	_, err := conn.Write(begin)
-	if err != nil {
-		return err
+	if err := c.Connect(); err != nil {
+		t.Fatal(err)
 	}
-	_, err = conn.Write(headBytes)
-	if err != nil {
-		return err
-	}
-	_, err = conn.Write(actionName)
-	if err != nil {
-		return err
-	}
-	_, err = conn.Write(content)
-	if err != nil {
-		return err
-	}
-	_, err = conn.Write(end)
-	if err != nil {
-		return err
-	}
-	return nil
+
+	// 指定调用方法路径
+	return c.SendAction("/v1/say", msg)
 }
 ```
+
+## 自定义发送数据包过滤器
+因为某些情况下，服务器收包和发包对协议的定义不一定一致，可以通过设置goserver主体的SendPacketFilter来实现服务器向客户端发送数据包时的封包协议，也可以通过方法过滤发送的数据包内容。
+```go
+func main() {
+	// 新建服务
+	mainServer := goserver.New(goserver.TCP, "", 8080)
+	// 开始结束标记过滤器
+	mainServer.SetReceiveFilter(&filter.BeginEndMarkReceiveFilter{
+		Begin: []byte{'!', '$'},
+		End:   []byte{'$', '!'},
+	})
+	// 注册发送数据包过滤器
+	// 该示例设置为发送包封包与服务器拆包协议不同
+	mainServer.RegisterSendPacketFilter(goserver.Middlewares{
+		func(as *goserver.AppSession, b []byte) ([]byte, error) {
+			return bytes.Join([][]byte{{'#', '$'}, b, {'$', '#'}}, nil), nil
+		},
+	})
+	// 注册OnError事件
+	mainServer.SetOnError(onError)
+
+	// 使用模块注册Action
+	err = mainServer.RegisterModule(&module{})
+	if err != nil {
+		log.Panic(err)
+	}
+	// 开启服务
+	mainServer.Start()
+}
+```
+
 
 ## 中间件  
 goserver主体和ActionModule可以注册使用中间件，各自有before和after两个事件，都是相对于实际的action。如下：
@@ -280,15 +293,29 @@ mainServer.IdleSessionTimeOut = 10
 ```go
 // 设置数据拆包方法
 SetSplitFunc(splitFunc bufio.SplitFunc)
+// 设置数据包最大长度
+SetMaxScanTokenSize(maxScanTokenSize int)
+// 注册TCP连接过滤器
+RegisterConnectionFilterTCP(connectionFilter ...filter.ConnectionFilterTCP)
+// 注册UDP连接过滤器
+RegisterConnectionFilterUDP(connectionFilter ...filter.ConnectionFilterUDP)
 // 设置接收到新消息处理方法
-SetOnMessage(onMessageFunc func(*AppSession, []byte))
+SetOnMessage(onMessageFunc ActionFunc)
+// 注册发送数据包过滤器
+RegisterSendPacketFilter(mids Middlewares)
+// 注册Action前置中间件
+RegisterBeforeMiddlewares(mids Middlewares)
+// 注册Action后置中间件
+RegisterAfterMiddlewares(mids Middlewares)
+// 设置IO结束标记，设置后，服务器关闭客户端时，会尝试发送此标记
+SetEOF(ioEOF []byte)
 ```
 ### 3. 命令路由
 ```go
 // 设置过滤器
 SetReceiveFilter(s ReceiveFilter)
 // 添加单个命令路由方法
-Action(path string,actionFunc func(*AppSession,[]byte)) error
+Action(path string, actionFunc ...ActionFunc) error
 // 注册方法处理模块（命令路由）
 RegisterModule(m ActionModule) error
 ```
