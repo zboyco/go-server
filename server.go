@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"time"
 
@@ -69,12 +69,12 @@ func newServer(network Network, ip string, port int, config *tls.Config) *Server
 // Start 开始监听
 func (server *Server) Start() {
 	if server.splitFunc == nil {
-		log.Println("use default split function")
+		slog.Info("use default split function")
 		server.splitFunc = bufio.ScanLines
 	}
 
 	if len(server.actions) == 0 {
-		log.Println("error: no message action")
+		slog.Error("no message action")
 		return
 	}
 
@@ -84,7 +84,7 @@ func (server *Server) Start() {
 	if server.ip != "" && server.ip != "localhost" {
 		ipAddr := net.ParseIP(server.ip)
 		if ipAddr == nil {
-			log.Println("ip地址不正确!", server.ip)
+			slog.Error(fmt.Sprintf("ip address [%s] error", server.ip))
 			return
 		}
 		if ipAddr.To4() == nil {
@@ -98,7 +98,7 @@ func (server *Server) Start() {
 	case UDP:
 		server.startUDP(addr)
 	default:
-		log.Println("未知的传输协议：", server.network)
+		slog.Error(fmt.Sprintf("unknown network %s", server.network))
 		return
 	}
 }
@@ -114,11 +114,11 @@ func (server *Server) printServerInfo() {
 			fmt.Print("\n")
 		}
 	}
-	fmt.Printf("[GO-SERVER] Listen on %s:%d\n\n", server.ip, server.port)
+	fmt.Printf("[GO-SERVER] Listen %s on %s:%d\n\n", server.network, server.ip, server.port)
 }
 
 func (server *Server) handleOnError(err error) {
-	log.Println(err)
+	slog.Error(err.Error())
 	if server.onError != nil {
 		server.onError(err)
 	}

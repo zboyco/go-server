@@ -16,8 +16,8 @@ go-server 是我在学习golang的过程中，从最简单的socket一步一步�
 10. ...  
 
 问题如下：  
-1. ...原谅我不会写文档 (╥╯^╰╥)  
-2. 有什么问题大家随便留言  
+1. ...原谅我不会写文档  
+2. 有什么问题大家留言  
 3. ...
 
 # 使用方法
@@ -50,18 +50,21 @@ func onMessage(client *goserver.AppSession, token []byte) ([]byte, error) {
 	return []byte("Got!"), nil
 }
 ```
+
 ## 使用tls
-使用`NewWithTLS`方法新建一个tls服务  
+使用`NewTCPWithTLS`方法新建一个tls tcp服务
+> 目前只支持 tcp 协议  
 ```go
 	crt, err := tls.LoadX509KeyPair("server.crt", "server.key")
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
 	// 新建服务
-	mainServer := goserver.NewWithTLS("", 8080, &tls.Config{
+	mainServer := goserver.NewTCPWithTLS("", 8080, &tls.Config{
 		Certificates: []tls.Certificate{crt},
 	})
 ```
+
 ## 自定义拆包协议
 go-server 采用标准库`bufio.Scanner`实现数据拆包，默认使用`ScanLines`实现换行符拆包，支持自定义拆包规则，可以根据自己的需求制定，只需要自定义一个`bufio.SplitFunc`方法即可。  
 假设我们采用 `head`+`body`的方式定义package，并指定第1个字节是`'$'`，第4个字节是`'#'`,第2、3位两个字节使用`int16`存储`body`长度，例子如下：
@@ -103,6 +106,7 @@ func onMessage(client *goserver.AppSession, token []byte) ([]byte, error) {
 	return []byte("Got!"), nil
 }
 ```
+
 ## 使用命令路由方式调用方法
 上面的使用方法，我们都将接收到的消息放在一个`onMessage`中处理，而多数时候，我们希望将不同的请求使用不同的方法处理，go-server 提供了一种方式，配合`ReceiveFilter`过滤器 和`ActionModule`处理模块，可以实现不同请求调用不同方法。  
 
@@ -226,7 +230,6 @@ func main() {
 }
 ```
 
-
 ## 中间件  
 goserver主体和ActionModule可以注册使用中间件，各自有before和after两个事件，都是相对于实际的action。如下：
 goserver主体，直接使用方法注册
@@ -289,6 +292,7 @@ mainServer.AcceptCount = 10
 // 客户端空闲超时时间(秒)，默认300s,<=0则不设置超时
 mainServer.IdleSessionTimeOut = 10
 ```
+
 ### 2. 数据处理
 ```go
 // 设置数据拆包方法
@@ -310,6 +314,7 @@ RegisterAfterMiddlewares(mids Middlewares)
 // 设置IO结束标记，设置后，服务器关闭客户端时，会尝试发送此标记
 SetEOF(ioEOF []byte)
 ```
+
 ### 3. 命令路由
 ```go
 // 设置过滤器
@@ -319,6 +324,7 @@ Action(path string, actionFunc ...ActionFunc) error
 // 注册方法处理模块（命令路由）
 RegisterModule(m ActionModule) error
 ```
+
 ### 4. 三个设置通知的方法：
 ```go
 // 设置输出错误信息方法
@@ -328,6 +334,7 @@ SetOnNewSessionRegister(onNewSessionRegisterFunc func(*AppSession))
 // 设置会话关闭通知
 SetOnSessionClosed(onSessionClosedFunc func(*AppSession, string))
 ```
+
 ### 5. 三个获取在线会话的方法:
 ```go
 // 通过ID获取会话
@@ -352,6 +359,7 @@ for {
 	session.Send([]byte(fmt.Sprintf("server to client [%v]: hi~", session.ID)))
 }
 ```
+
 ## AppSession 会话
 `AppSession`是go-server中封装的会话结构，暴露以下两个属性：
 ```go

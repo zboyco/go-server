@@ -6,10 +6,12 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 // New 新建一个tcp服务
@@ -22,16 +24,14 @@ func (server *Server) startUDP(addr string) {
 	// 解析地址
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
-		log.Println("解析地址出错, ", err)
-		server.handleOnError(err)
+		server.handleOnError(errors.Wrap(err, "resolve udp addr error"))
 		return
 	}
 
 	// 监听UDP连接
 	udpConn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
-		log.Println("监听UDP连接出错, ", err)
-		server.handleOnError(err)
+		server.handleOnError(errors.Wrap(err, "listen udp error"))
 		return
 	}
 
@@ -53,8 +53,7 @@ func (server *Server) startUDP(addr string) {
 			buffer := make([]byte, bufferLength)
 			n, clientAddr, err := udpConn.ReadFromUDP(buffer)
 			if err != nil {
-				log.Println("从UDP读取失败, ", err)
-				server.handleOnError(err)
+				server.handleOnError(errors.Wrap(err, "read udp error"))
 				continue
 			}
 			server.handleUDPClient(udpConn, clientAddr, buffer[:n])
@@ -72,7 +71,7 @@ func (server *Server) handleUDPClient(conn net.Conn, clientAddr *net.UDPAddr, da
 	if server.connectionFilterUDP != nil {
 		for i := range server.connectionFilterUDP {
 			if err := server.connectionFilterUDP[i](clientAddr); err != nil {
-				log.Printf("connect[%s] filter because %s", clientAddr.String(), err.Error())
+				slog.Warn(fmt.Sprintf("connect[%s] filter because %s", clientAddr.String(), err.Error()))
 				return
 			}
 		}
@@ -99,7 +98,7 @@ func (server *Server) handleUDPClient(conn net.Conn, clientAddr *net.UDPAddr, da
 		}
 
 		// 获取连接地址
-		log.Println("客户端[", session.ID, "]地址:", clientAddr.String())
+		slog.Debug(fmt.Sprintf("client[%s] address: %s", session.ID, clientAddr.String()))
 
 		// 新客户端接入通知
 		if server.onNewSessionRegister != nil {
@@ -183,7 +182,7 @@ func (server *Server) udpSplitData(session *AppSession) {
 		}
 	}
 
-	server.handleOnError(err)
+	server.handleOnError(errors.Wrap(err, "scan udp error"))
 	server.closeSession(session, err.Error())
 }
 

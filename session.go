@@ -2,8 +2,9 @@ package goserver
 
 import (
 	"errors"
+	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"time"
 )
@@ -57,13 +58,13 @@ func (session *AppSession) Send(buf []byte) error {
 
 // Close 关闭连接
 func (session *AppSession) Close(reason string) {
-	log.Println("客户端[", session.ID, "]关闭，原因如下：", reason)
+	slog.Debug(fmt.Sprintf("client[%s] close because %s", session.ID, reason))
 	session.IsClosed = true
 	if session.network == UDP {
 		return
 	}
 	if err := session.conn.Close(); err != nil {
-		log.Println(err)
+		slog.Error(fmt.Sprintf("client[%s] close error: %s", session.ID, err.Error()))
 	}
 }
 

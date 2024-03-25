@@ -2,7 +2,7 @@ package goserver
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"sync"
 )
 
@@ -41,7 +41,7 @@ func (s *sessionPool) sessionPoolManager() {
 		m, ok := <-s.list
 
 		if !ok {
-			log.Println("Session池通道关闭")
+			slog.Warn("session pool channel closed")
 			return
 		}
 		// 加入池

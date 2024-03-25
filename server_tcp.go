@@ -3,12 +3,14 @@ package goserver
 import (
 	"bufio"
 	"crypto/tls"
-	"log"
+	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
 // New 新建一个tcp服务
@@ -47,8 +49,7 @@ func (server *Server) startTCP(addr string) {
 		tcpListener, err = tls.Listen("tcp", addr, server.tlsConfig)
 	}
 	if err != nil {
-		log.Println("监听出错, ", err)
-		server.handleOnError(err)
+		server.handleOnError(errors.Wrap(err, "listen tcp error"))
 		return
 	}
 
@@ -67,8 +68,7 @@ func (server *Server) startTCP(addr string) {
 				// 开始接收连接
 				conn, err := tcpListener.Accept()
 				if err != nil {
-					log.Println("客户端连接失败, ", err)
-					server.handleOnError(err)
+					server.handleOnError(errors.Wrap(err, "accept tcp error"))
 					continue
 				}
 				// 启用goroutine处理
@@ -88,7 +88,7 @@ func (server *Server) handleTCPClient(conn net.Conn) {
 	if server.connectionFilterTCP != nil {
 		for i := range server.connectionFilterTCP {
 			if err := server.connectionFilterTCP[i](conn); err != nil {
-				log.Printf("connect[%s] filter because %s", conn.RemoteAddr(), err.Error())
+				slog.Warn(fmt.Sprintf("connect[%s] filter because %s", conn.RemoteAddr(), err.Error()))
 				_ = conn.Close()
 				return
 			}
@@ -106,7 +106,7 @@ func (server *Server) handleTCPClient(conn net.Conn) {
 
 	// 获取连接地址
 	remoteAddr := session.conn.RemoteAddr()
-	log.Println("客户端[", session.ID, "]地址:", remoteAddr)
+	slog.Debug(fmt.Sprintf("client[%s] address: %s", session.ID, remoteAddr))
 
 	// 新客户端接入通知
 	if server.onNewSessionRegister != nil {
@@ -133,7 +133,8 @@ func (server *Server) handleTCPClient(conn net.Conn) {
 	if server.IdleSessionTimeOut > 0 {
 		err := session.conn.SetReadDeadline(time.Now().Add(server.idleSessionTimeOutDuration))
 		if err != nil {
-			log.Println(err)
+			server.handleOnError(errors.Wrap(err, "set read deadline error"))
+			return
 		}
 	}
 
@@ -166,7 +167,7 @@ func (server *Server) handleTCPClient(conn net.Conn) {
 		err = scanner.Err()
 	}
 	if err != nil {
-		server.handleOnError(err)
+		server.handleOnError(errors.Wrap(err, "scan tcp error"))
 		server.closeSession(session, err.Error())
 		return
 	}
