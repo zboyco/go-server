@@ -434,6 +434,12 @@ DelAttr(key string) error
     实现通过属性获取会话方法（返回会话channel）  
     包名修改为`goserver`,发布第一个`tag`  
     增加命令路由单个注册方法`Action`  
-18. [实现连接过滤器和数据中间件](https://github.com/zboyco/go-server)  
+18. [实现连接过滤器和数据中间件](https://github.com/zboyco/go-server/tree/step-18)  
 	> 实现连接过滤器，过滤器返回错误则会立即断开连接  
-	增加数据中间件，分为服务中间件和模块中间件，各有before和after两个时间点，执行顺序为 `server.before`->`module.before`->`action`->`module.after`->`server.after`
+	增加数据中间件，分为服务中间件和模块中间件，各有before和after两个时间点，执行顺序为 `server.before`->`module.before`->`action`->`module.after`->`server.after`  
+19. [实现udp支持](https://github.com/zboyco/go-server)  
+    > 实现 udp 支持(因 udp 特性，采用 remoteAddr 模拟会话)  
+	> 提供 tcp/udp 客户端代码实现，支持原始对接和`标记数据包开始和结尾字节`对接  
+	> 增加`RegisterSendPacketFilter(mids Middlewares)`方法，用于过滤服务器向客户端发送的数据包，也可以用语设置服务器封包协议  
+	> 增加启动时路由打印  
+	> 增加`SetEOF(ioEOF []byte)`方法，设置结束标记后，会话关闭时会尝试发出该标记  
