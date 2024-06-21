@@ -96,6 +96,8 @@ func (server *Server) handleUDPClient(conn net.Conn, clientAddr *net.UDPAddr, da
 			udpReadDeadline: time.Now().Add(server.idleSessionTimeOutDuration),
 			udpClientIO:     NewSafeByteSlice(),
 		}
+		// 设置会话关闭触发器
+		session.closeTrigger = server.closeSessionTrigger(session)
 
 		// 获取连接地址
 		slog.Debug(fmt.Sprintf("client[%s] address: %s", session.ID, clientAddr.String()))

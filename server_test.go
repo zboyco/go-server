@@ -59,6 +59,10 @@ func BeginEndServer(network goserver.Network) {
 
 		mainServer.SetOnError(onError)
 
+		mainServer.SetOnSessionClosed(func(session *goserver.AppSession, reason string) {
+			log.Println("会话关闭:", session.ID, "原因", reason)
+		})
+
 		mainServer.Start()
 	}()
 }

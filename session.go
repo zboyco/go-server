@@ -22,6 +22,8 @@ type AppSession struct {
 	udpAddr         *net.UDPAddr  // udp地址
 	udpClientIO     io.ReadWriter // 用于udp客户端
 	udpReadDeadline time.Time     // 超时时间,用于udp超时检测
+
+	closeTrigger func(reason string) // 会话关闭触发器
 }
 
 // SendRaw 发送原始数据
@@ -58,6 +60,11 @@ func (session *AppSession) Send(buf []byte) error {
 
 // Close 关闭连接
 func (session *AppSession) Close(reason string) {
+	defer func() {
+		// 连接关闭后,触发关闭事件
+		session.closeTrigger(reason)
+	}()
+
 	slog.Debug(fmt.Sprintf("client[%s] close because %s", session.ID, reason))
 	session.IsClosed = true
 	if session.network == UDP {

@@ -103,6 +103,8 @@ func (server *Server) handleTCPClient(conn net.Conn) {
 		attr:             make(map[string]interface{}),
 		sendPacketFilter: server.sendPacketFilter,
 	}
+	// 设置会话关闭触发器
+	session.closeTrigger = server.closeSessionTrigger(session)
 
 	// 获取连接地址
 	remoteAddr := session.conn.RemoteAddr()

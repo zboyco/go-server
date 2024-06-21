@@ -126,13 +126,25 @@ func (server *Server) handleOnError(err error) {
 
 // closeSession 关闭session
 func (server *Server) closeSession(session *AppSession, reason string) {
-	// 如果设置了ioEOF，尝试发送
-	if len(server.ioEOF) != 0 {
-		_ = session.Send(server.ioEOF)
-	}
 	go session.Close(reason)
-	// 从池中移除
-	go server.sessionSource.deleteSession(session)
+}
+
+// closeSessionTrigger 关闭session触发器
+func (server *Server) closeSessionTrigger(session *AppSession) func(string) {
+	return func(reason string) {
+		// 如果设置了ioEOF，尝试发送
+		if len(server.ioEOF) != 0 {
+			_ = session.Send(server.ioEOF)
+		}
+
+		// 关闭session通知
+		if server.onSessionClosed != nil {
+			go server.onSessionClosed(session, reason)
+		}
+
+		// 从池中移除
+		go server.sessionSource.deleteSession(session)
+	}
 }
 
 // SetEOF 设置IO结束标记
@@ -173,7 +185,7 @@ func (server *Server) SetOnNewSessionRegister(onNewSessionRegisterFunc func(*App
 }
 
 // SetOnSessionClosed 设置会话关闭时处理方法
-func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(*AppSession, string)) {
+func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(session *AppSession, reason string)) {
 	server.onSessionClosed = onSessionClosedFunc
 }
 
