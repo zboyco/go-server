@@ -45,6 +45,7 @@ type Server struct {
 	sendPacketFilter    Middlewares                                                   // 发送数据过滤
 	actions             map[string][]ActionFunc                                       // 消息处理方法字典
 
+	running bool                  // 是否正在运行
 	routers map[string][][]string // 用于启动时输出路由表
 }
 
@@ -68,6 +69,15 @@ func newServer(network Network, ip string, port int, config *tls.Config) *Server
 
 // Start 开始监听
 func (server *Server) Start() {
+	if server.running {
+		slog.Error("server is running")
+		return
+	}
+	server.running = true
+	defer func() {
+		server.running = false
+	}()
+
 	if server.splitFunc == nil {
 		slog.Info("use default split function")
 		server.splitFunc = bufio.ScanLines
@@ -149,69 +159,134 @@ func (server *Server) closeSessionTrigger(session *AppSession) func(string) {
 
 // SetEOF 设置IO结束标记
 // 设置后，服务器关闭客户端时，会尝试发送此标记
-func (server *Server) SetEOF(ioEOF []byte) {
+func (server *Server) SetEOF(ioEOF []byte) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.ioEOF = ioEOF
+	return nil
 }
 
 // SetSplitFunc 设置数据拆包方法
-func (server *Server) SetSplitFunc(splitFunc bufio.SplitFunc) {
+func (server *Server) SetSplitFunc(splitFunc bufio.SplitFunc) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.splitFunc = splitFunc
+	return nil
 }
 
 // SetReceiveFilter 设置过滤器
-func (server *Server) SetReceiveFilter(s filter.ReceiveFilter) {
+func (server *Server) SetReceiveFilter(s filter.ReceiveFilter) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.splitFunc = s.SplitFunc()
 	server.resolveAction = s.ResolveAction()
+	return nil
 }
 
 // SetMaxScanTokenSize 设置数据最大长度
-func (server *Server) SetMaxScanTokenSize(maxScanTokenSize int) {
+func (server *Server) SetMaxScanTokenSize(maxScanTokenSize int) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.maxScanTokenSize = maxScanTokenSize
+	return nil
 }
 
 // SetOnMessage 设置接收到新消息处理方法
-func (server *Server) SetOnMessage(onMessageFunc ActionFunc) {
+func (server *Server) SetOnMessage(onMessageFunc ActionFunc) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.actions[""] = []ActionFunc{onMessageFunc}
+	return nil
 }
 
 // SetOnError 设置接收到错误处理方法
-func (server *Server) SetOnError(onErrorFunc func(error)) {
+func (server *Server) SetOnError(onErrorFunc func(error)) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.onError = onErrorFunc
+	return nil
 }
 
 // SetOnNewSessionRegister 设置新会话加入时处理方法
-func (server *Server) SetOnNewSessionRegister(onNewSessionRegisterFunc func(*AppSession)) {
+func (server *Server) SetOnNewSessionRegister(onNewSessionRegisterFunc func(*AppSession)) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.onNewSessionRegister = onNewSessionRegisterFunc
+	return nil
 }
 
 // SetOnSessionClosed 设置会话关闭时处理方法
-func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(session *AppSession, reason string)) {
+func (server *Server) SetOnSessionClosed(onSessionClosedFunc func(session *AppSession, reason string)) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.onSessionClosed = onSessionClosedFunc
+	return nil
 }
 
 // RegisterConnectionFilterTCP 注册TCP连接过滤器
-func (server *Server) RegisterConnectionFilterTCP(connectionFilter ...filter.ConnectionFilterTCP) {
+func (server *Server) RegisterConnectionFilterTCP(connectionFilter ...filter.ConnectionFilterTCP) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.connectionFilterTCP = connectionFilter
+	return nil
 }
 
 // RegisterConnectionFilterUDP 注册UDP连接过滤器
-func (server *Server) RegisterConnectionFilterUDP(connectionFilter ...filter.ConnectionFilterUDP) {
+func (server *Server) RegisterConnectionFilterUDP(connectionFilter ...filter.ConnectionFilterUDP) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.connectionFilterUDP = connectionFilter
+	return nil
 }
 
 // RegisterSendPacketFilter 注册发送数据包过滤器
-func (server *Server) RegisterSendPacketFilter(mids Middlewares) {
+func (server *Server) RegisterSendPacketFilter(mids Middlewares) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.sendPacketFilter = mids
+	return nil
 }
 
 // RegisterBeforeMiddlewares 注册action前置中间件
-func (server *Server) RegisterBeforeMiddlewares(mids Middlewares) {
+func (server *Server) RegisterBeforeMiddlewares(mids Middlewares) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.middlewaresBefore = mids
+	return nil
 }
 
 // RegisterAfterMiddlewares 注册action后置中间件
-func (server *Server) RegisterAfterMiddlewares(mids Middlewares) {
+func (server *Server) RegisterAfterMiddlewares(mids Middlewares) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	server.middlewaresAfter = mids
+	return nil
 }
 
 // GetSessionByID 通过ID获取会话

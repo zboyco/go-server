@@ -36,11 +36,11 @@ func (m *module) Say(client *goserver.AppSession, token []byte) ([]byte, error) 
 func BeginEndServer(network goserver.Network) {
 	go func() {
 		mainServer := goserver.New(network, "", 8080)
-		mainServer.SetEOF([]byte("x$$io.EOF$$x"))
+		_ = mainServer.SetEOF([]byte("x$$io.EOF$$x"))
 
 		mainServer.IdleSessionTimeOut = 5
 
-		mainServer.SetReceiveFilter(&filter.BeginEndMarkReceiveFilter{
+		_ = mainServer.SetReceiveFilter(&filter.BeginEndMarkReceiveFilter{
 			Begin: []byte{'!', '$'},
 			End:   []byte{'$', '!'},
 		})
@@ -49,17 +49,17 @@ func BeginEndServer(network goserver.Network) {
 			log.Panic(err)
 		}
 
-		mainServer.RegisterSendPacketFilter(goserver.Middlewares{
+		_ = mainServer.RegisterSendPacketFilter(goserver.Middlewares{
 			func(as *goserver.AppSession, b []byte) ([]byte, error) {
 				return bytes.Join([][]byte{{'!', '$'}, b, {'$', '!'}}, nil), nil
 			},
 		})
 
-		mainServer.SetOnMessage(onMessage)
+		_ = mainServer.SetOnMessage(onMessage)
 
-		mainServer.SetOnError(onError)
+		_ = mainServer.SetOnError(onError)
 
-		mainServer.SetOnSessionClosed(func(session *goserver.AppSession, reason string) {
+		_ = mainServer.SetOnSessionClosed(func(session *goserver.AppSession, reason string) {
 			log.Println("会话关闭:", session.ID, "原因", reason)
 		})
 
@@ -73,7 +73,7 @@ func StartServer() {
 		mainServer.IdleSessionTimeOut = 10
 
 		// 根据协议定义分离规则
-		mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
+		_ = mainServer.SetSplitFunc(func(data []byte, atEOF bool) (int, []byte, error) {
 			if atEOF {
 				return 0, nil, errors.New("EOF")
 			}
@@ -90,9 +90,9 @@ func StartServer() {
 			return 0, nil, nil
 		})
 
-		mainServer.SetOnMessage(onMessage)
+		_ = mainServer.SetOnMessage(onMessage)
 
-		mainServer.SetOnError(onError)
+		_ = mainServer.SetOnError(onError)
 
 		mainServer.Start()
 	}()

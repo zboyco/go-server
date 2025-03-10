@@ -40,7 +40,7 @@ func main() {
 	// 	return 0, nil, nil
 	// })
 
-	mainServer.SetReceiveFilter(&filter.BeginEndMarkReceiveFilter{
+	_ = mainServer.SetReceiveFilter(&filter.BeginEndMarkReceiveFilter{
 		Begin: []byte{'!', '$'},
 		End:   []byte{'$', '!'},
 	})
@@ -61,7 +61,7 @@ func main() {
 		log.Panic(err)
 	}
 
-	mainServer.RegisterBeforeMiddlewares(goserver.Middlewares{
+	_ = mainServer.RegisterBeforeMiddlewares(goserver.Middlewares{
 		func(client *goserver.AppSession, token []byte) ([]byte, error) {
 			return []byte(string(token) + "-before1-"), nil
 		},
@@ -70,7 +70,7 @@ func main() {
 		},
 	})
 
-	mainServer.RegisterAfterMiddlewares(goserver.Middlewares{
+	_ = mainServer.RegisterAfterMiddlewares(goserver.Middlewares{
 		func(client *goserver.AppSession, token []byte) ([]byte, error) {
 			return []byte(string(token) + "-after3-"), nil
 		},
@@ -90,9 +90,9 @@ func main() {
 	}
 
 	// 注册OnMessage事件
-	mainServer.SetOnMessage(onMessage)
+	_ = mainServer.SetOnMessage(onMessage)
 	// 注册OnError事件
-	mainServer.SetOnError(onError)
+	_ = mainServer.SetOnError(onError)
 
 	go func() {
 		counter := 0

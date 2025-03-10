@@ -19,6 +19,10 @@ type ActionSummary interface {
 
 // RegisterModule 注册方法处理模块（命令路由）
 func (server *Server) RegisterModule(m ActionModule) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	mType := reflect.TypeOf(m)
 	mValue := reflect.ValueOf(m)
 
@@ -106,6 +110,10 @@ func (server *Server) hookAction(funcName string, session *AppSession, token []b
 
 // Action 添加单个Action
 func (server *Server) Action(path string, actionFunc ...ActionFunc) error {
+	if server.running {
+		return ErrServerRunning
+	}
+
 	return server.action(path, ".", "", actionFunc...)
 }
 
