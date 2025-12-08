@@ -105,3 +105,14 @@ func (session *AppSession) DelAttr(key string) error {
 	delete(session.attr, key)
 	return nil
 }
+
+// RemoteAddr 返回客户端远端地址（IP:端口）
+func (session *AppSession) RemoteAddr() net.Addr {
+	if session.network == UDP && session.udpAddr != nil {
+		return session.udpAddr
+	}
+	if session.conn != nil {
+		return session.conn.RemoteAddr()
+	}
+	return nil
+}

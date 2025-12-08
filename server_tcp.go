@@ -150,7 +150,8 @@ func (server *Server) handleTCPClient(conn net.Conn) {
 				break
 			}
 		}
-		token := scanner.Bytes()
+		// copy token 避免被 scanner 内部缓冲区覆盖
+		token := append([]byte(nil), scanner.Bytes()...)
 		actionName := ""
 		if server.resolveAction != nil {
 			actionName, token, err = server.resolveAction(token)

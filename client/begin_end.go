@@ -23,6 +23,8 @@ func NewBeginEndMarkClient(network goserver.Network, ip string, port int, filter
 }
 
 // Connect 连接
+// 注意：如果要使用 Begin/End 标识拆包功能，请在 Connect 之前手动调用：
+// client.SetScannerSplitFunc(client.SplitFunc())
 func (client *BeginEndMarkClient) Connect() error {
 	if client.BeginEndMarkReceiveFilter == nil {
 		return errors.New("BeginEndMarkReceiveFilter is nil")
