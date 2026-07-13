@@ -52,12 +52,16 @@ func (server *Server) startTCP(addr string) {
 		server.handleOnError(errors.Wrap(err, "listen tcp error"))
 		return
 	}
+	if !server.setTCPListener(tcpListener) {
+		_ = tcpListener.Close()
+		return
+	}
 
 	// 程序返回后关闭socket
 	defer tcpListener.Close()
 
 	// 开启会话池管理
-	go server.sessionSource.sessionPoolManager()
+	go server.sessionSource.sessionPoolManager(server.stopSignal())
 
 	var wg sync.WaitGroup
 	for i := 0; i < server.AcceptCount; i++ {
@@ -68,6 +72,9 @@ func (server *Server) startTCP(addr string) {
 				// 开始接收连接
 				conn, err := tcpListener.Accept()
 				if err != nil {
+					if server.isStopping() {
+						return
+					}
 					server.handleOnError(errors.Wrap(err, "accept tcp error"))
 					continue
 				}
@@ -100,7 +107,7 @@ func (server *Server) handleTCPClient(conn net.Conn) {
 		ID:               uuid.NewString(),
 		network:          TCP,
 		conn:             conn,
-		attr:             make(map[string]interface{}),
+		attr:             sessionAttr{values: make(map[string]interface{})},
 		sendPacketFilter: server.sendPacketFilter,
 	}
 	// 设置会话关闭触发器

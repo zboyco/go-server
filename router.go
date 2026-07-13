@@ -22,11 +22,27 @@ func (server *Server) RegisterModule(m ActionModule) error {
 	if server.running {
 		return ErrServerRunning
 	}
+	if m == nil {
+		return ErrModuleFormat
+	}
 
 	mType := reflect.TypeOf(m)
 	mValue := reflect.ValueOf(m)
+	if mValue.Kind() == reflect.Ptr && mValue.IsNil() {
+		return ErrModuleFormat
+	}
+	if mType.Kind() == reflect.Ptr {
+		if mType.Elem().Kind() != reflect.Struct {
+			return ErrModuleFormat
+		}
+	} else if mType.Kind() != reflect.Struct {
+		return ErrModuleFormat
+	}
 
-	structPath := mType.Elem().String()
+	structPath := mType.String()
+	if mType.Kind() == reflect.Ptr {
+		structPath = mType.Elem().String()
+	}
 
 	if summary, ok := m.(ActionSummary); ok {
 		structPath = fmt.Sprintf("%s %s", structPath, summary.Summary())
@@ -121,6 +137,7 @@ func (server *Server) action(path, structPath, methodName string, actionFunc ...
 	if path == "" || path[0] != '/' {
 		return ErrPathFormat
 	}
+	path = strings.ToLower(path)
 	if _, exist := server.actions[path]; exist {
 		return ErrActionConflict
 	}

@@ -2,10 +2,12 @@ package goserver
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/zboyco/go-server/filter"
@@ -45,8 +47,13 @@ type Server struct {
 	sendPacketFilter    Middlewares                                                   // 发送数据过滤
 	actions             map[string][]ActionFunc                                       // 消息处理方法字典
 
-	running bool                  // 是否正在运行
-	routers map[string][][]string // 用于启动时输出路由表
+	lifecycleLocker sync.Mutex            // 保护服务启动、停止和监听器状态
+	running         bool                  // 是否正在运行
+	stop            chan struct{}         // 停止信号
+	done            chan struct{}         // Start 退出信号
+	tcpListener     net.Listener          // TCP 监听器
+	udpConn         *net.UDPConn          // UDP 监听连接
+	routers         map[string][][]string // 用于启动时输出路由表
 }
 
 func newServer(network Network, ip string, port int, config *tls.Config) *Server {
@@ -69,14 +76,11 @@ func newServer(network Network, ip string, port int, config *tls.Config) *Server
 
 // Start 开始监听
 func (server *Server) Start() {
-	if server.running {
+	if !server.beginStart() {
 		slog.Error("server is running")
 		return
 	}
-	server.running = true
-	defer func() {
-		server.running = false
-	}()
+	defer server.finishStart()
 
 	if server.splitFunc == nil {
 		slog.Info("use default split function")
@@ -113,6 +117,170 @@ func (server *Server) Start() {
 	}
 }
 
+// Stop 停止服务监听并关闭当前会话。
+func (server *Server) Stop() error {
+	return server.shutdown(context.Background())
+}
+
+// Shutdown 按 context 约束停止服务监听并关闭当前会话。
+func (server *Server) Shutdown(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return server.shutdown(ctx)
+}
+
+func (server *Server) shutdown(ctx context.Context) error {
+	var firstErr error
+
+	server.lifecycleLocker.Lock()
+	if !server.running {
+		server.lifecycleLocker.Unlock()
+		return nil
+	}
+	server.signalStopLocked()
+	tcpListener := server.tcpListener
+	udpConn := server.udpConn
+	done := server.done
+	server.lifecycleLocker.Unlock()
+
+	if tcpListener != nil {
+		if err := tcpListener.Close(); err != nil {
+			firstErr = err
+		}
+	}
+	if udpConn != nil {
+		if err := udpConn.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	server.sessionSource.stop()
+	server.closeAllSessions("server stop")
+	server.sessionSource.clear()
+
+	if done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return firstErr
+}
+
+// Addr 返回当前服务实际监听地址，服务未启动时返回 nil。
+func (server *Server) Addr() net.Addr {
+	server.lifecycleLocker.Lock()
+	defer server.lifecycleLocker.Unlock()
+
+	if server.tcpListener != nil {
+		return server.tcpListener.Addr()
+	}
+	if server.udpConn != nil {
+		return server.udpConn.LocalAddr()
+	}
+	return nil
+}
+
+func (server *Server) beginStart() bool {
+	server.lifecycleLocker.Lock()
+	defer server.lifecycleLocker.Unlock()
+
+	if server.running {
+		return false
+	}
+	server.running = true
+	server.stop = make(chan struct{})
+	server.done = make(chan struct{})
+	server.sessionSource.start()
+	return true
+}
+
+func (server *Server) finishStart() {
+	server.lifecycleLocker.Lock()
+	server.signalStopLocked()
+	done := server.done
+	server.running = false
+	server.tcpListener = nil
+	server.udpConn = nil
+	server.stop = nil
+	server.done = nil
+	server.lifecycleLocker.Unlock()
+
+	server.sessionSource.stop()
+	if done != nil {
+		close(done)
+	}
+}
+
+func (server *Server) signalStopLocked() {
+	if server.stop == nil {
+		return
+	}
+	select {
+	case <-server.stop:
+	default:
+		close(server.stop)
+	}
+}
+
+func (server *Server) isStopping() bool {
+	server.lifecycleLocker.Lock()
+	stop := server.stop
+	server.lifecycleLocker.Unlock()
+
+	if stop == nil {
+		return false
+	}
+	select {
+	case <-stop:
+		return true
+	default:
+		return false
+	}
+}
+
+func (server *Server) stopSignal() <-chan struct{} {
+	server.lifecycleLocker.Lock()
+	defer server.lifecycleLocker.Unlock()
+
+	return server.stop
+}
+
+func (server *Server) setTCPListener(listener net.Listener) bool {
+	server.lifecycleLocker.Lock()
+	defer server.lifecycleLocker.Unlock()
+
+	select {
+	case <-server.stop:
+		return false
+	default:
+		server.tcpListener = listener
+		return true
+	}
+}
+
+func (server *Server) setUDPConn(conn *net.UDPConn) bool {
+	server.lifecycleLocker.Lock()
+	defer server.lifecycleLocker.Unlock()
+
+	select {
+	case <-server.stop:
+		return false
+	default:
+		server.udpConn = conn
+		return true
+	}
+}
+
+func (server *Server) closeAllSessions(reason string) {
+	sessions := server.GetAllSessions()
+	for session := range sessions {
+		session.closeWithEOF(reason, server.ioEOF)
+	}
+}
+
 func (server *Server) printServerInfo() {
 	for k, v := range server.routers {
 		fmt.Printf("[GO-SERVER] Source %s\n", k)
@@ -136,17 +304,12 @@ func (server *Server) handleOnError(err error) {
 
 // closeSession 关闭session
 func (server *Server) closeSession(session *AppSession, reason string) {
-	go session.Close(reason)
+	go session.closeWithEOF(reason, server.ioEOF)
 }
 
 // closeSessionTrigger 关闭session触发器
 func (server *Server) closeSessionTrigger(session *AppSession) func(string) {
 	return func(reason string) {
-		// 如果设置了ioEOF，尝试发送
-		if len(server.ioEOF) != 0 {
-			_ = session.Send(server.ioEOF)
-		}
-
 		// 关闭session通知
 		if server.onSessionClosed != nil {
 			go server.onSessionClosed(session, reason)

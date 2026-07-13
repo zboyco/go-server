@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"sync"
@@ -34,12 +35,16 @@ func (server *Server) startUDP(addr string) {
 		server.handleOnError(errors.Wrap(err, "listen udp error"))
 		return
 	}
+	if !server.setUDPConn(udpConn) {
+		_ = udpConn.Close()
+		return
+	}
 
 	// 程序返回后关闭socket
 	defer udpConn.Close()
 
 	// 开启会话池管理
-	go server.sessionSource.sessionPoolManager()
+	go server.sessionSource.sessionPoolManager(server.stopSignal())
 
 	var wg sync.WaitGroup
 
@@ -53,6 +58,9 @@ func (server *Server) startUDP(addr string) {
 			buffer := make([]byte, bufferLength)
 			n, clientAddr, err := udpConn.ReadFromUDP(buffer)
 			if err != nil {
+				if server.isStopping() {
+					return
+				}
 				server.handleOnError(errors.Wrap(err, "read udp error"))
 				continue
 			}
@@ -65,7 +73,7 @@ func (server *Server) startUDP(addr string) {
 	wg.Wait()
 }
 
-// handleTCPClient 读取数据
+// handleUDPClient 读取 UDP 数据
 func (server *Server) handleUDPClient(conn net.Conn, clientAddr *net.UDPAddr, data []byte) {
 	// 连接过滤器
 	if server.connectionFilterUDP != nil {
@@ -83,13 +91,17 @@ func (server *Server) handleUDPClient(conn net.Conn, clientAddr *net.UDPAddr, da
 	sessionID := hex.EncodeToString(md5Sum[:])
 
 	session, _ := server.GetSessionByID(sessionID)
+	if session != nil && session.isClosed() {
+		session = nil
+	}
+	created := false
 	if session == nil {
 		// 创建会话对象
-		session = &AppSession{
+		newSession := &AppSession{
 			ID:               sessionID,
 			network:          UDP,
 			conn:             conn,
-			attr:             make(map[string]interface{}),
+			attr:             sessionAttr{values: make(map[string]interface{})},
 			sendPacketFilter: server.sendPacketFilter,
 
 			udpAddr:         clientAddr,
@@ -97,8 +109,15 @@ func (server *Server) handleUDPClient(conn net.Conn, clientAddr *net.UDPAddr, da
 			udpClientIO:     NewSafeByteSlice(),
 		}
 		// 设置会话关闭触发器
-		session.closeTrigger = server.closeSessionTrigger(session)
+		newSession.closeTrigger = server.closeSessionTrigger(newSession)
 
+		session, created = server.sessionSource.storeSession(newSession)
+		if session == nil {
+			return
+		}
+	}
+
+	if created {
 		// 获取连接地址
 		slog.Debug(fmt.Sprintf("client[%s] address: %s", session.ID, clientAddr.String()))
 
@@ -106,9 +125,6 @@ func (server *Server) handleUDPClient(conn net.Conn, clientAddr *net.UDPAddr, da
 		if server.onNewSessionRegister != nil {
 			server.onNewSessionRegister(session)
 		}
-
-		// 注册Session
-		server.sessionSource.addSession(session)
 
 		// 启动超时检测
 		go server.udpReadTimeout(session)
@@ -118,7 +134,7 @@ func (server *Server) handleUDPClient(conn net.Conn, clientAddr *net.UDPAddr, da
 	}
 
 	// 更新超时时间
-	session.udpReadDeadline = time.Now().Add(server.idleSessionTimeOutDuration)
+	session.setUDPReadDeadline(time.Now().Add(server.idleSessionTimeOutDuration))
 	// 将读取的数据写入 buffer
 	_, _ = session.udpClientIO.Write(data)
 }
@@ -130,7 +146,7 @@ func (server *Server) udpReadTimeout(session *AppSession) {
 	}
 	for {
 		time.Sleep(time.Second)
-		if time.Now().After(session.udpReadDeadline) {
+		if time.Now().After(session.getUDPReadDeadline()) {
 			ip := "127.0.0.1"
 			if server.ip != "" {
 				ip = server.ip
@@ -145,58 +161,62 @@ func (server *Server) udpReadTimeout(session *AppSession) {
 func (server *Server) udpSplitData(session *AppSession) {
 	var err error
 
-	for {
-		// 创建scanner
-		scanner := bufio.NewScanner(session.udpClientIO)
-		if server.maxScanTokenSize > 0 {
-			if server.maxScanTokenSize > 4*1024 {
-				scanner.Buffer(make([]byte, 0, 4*1024), server.maxScanTokenSize)
-			} else {
-				scanner.Buffer(make([]byte, 0, server.maxScanTokenSize), server.maxScanTokenSize)
-			}
-		}
-
-		// 设置分离函数
-		scanner.Split(server.splitFunc)
-
-		// 获取数据
-		for scanner.Scan() {
-			token := scanner.Bytes()
-			actionName := ""
-			if server.resolveAction != nil {
-				actionName, token, err = server.resolveAction(token)
-				if err != nil {
-					break
-				}
-			}
-			hookErr := server.hookAction(actionName, session, token)
-			if hookErr != nil {
-				server.handleOnError(hookErr)
-			}
-		}
-
-		// 错误处理
-		if err == nil {
-			err = scanner.Err()
-		}
-		if err != nil {
-			break
+	// 创建scanner
+	scanner := bufio.NewScanner(session.udpClientIO)
+	if server.maxScanTokenSize > 0 {
+		if server.maxScanTokenSize > 4*1024 {
+			scanner.Buffer(make([]byte, 0, 4*1024), server.maxScanTokenSize)
+		} else {
+			scanner.Buffer(make([]byte, 0, server.maxScanTokenSize), server.maxScanTokenSize)
 		}
 	}
 
-	server.handleOnError(errors.Wrap(err, "scan udp error"))
-	server.closeSession(session, err.Error())
+	// 设置分离函数
+	scanner.Split(server.splitFunc)
+
+	// 获取数据
+	for scanner.Scan() {
+		token := scanner.Bytes()
+		actionName := ""
+		if server.resolveAction != nil {
+			actionName, token, err = server.resolveAction(token)
+			if err != nil {
+				break
+			}
+		}
+		hookErr := server.hookAction(actionName, session, token)
+		if hookErr != nil {
+			server.handleOnError(hookErr)
+		}
+	}
+
+	// 错误处理
+	if err == nil {
+		err = scanner.Err()
+	}
+	if err != nil {
+		server.handleOnError(errors.Wrap(err, "scan udp error"))
+		server.closeSession(session, err.Error())
+		return
+	}
+	if !session.isClosed() {
+		server.closeSession(session, "EOF")
+	}
 }
 
-// SafeByteSlice 实现了 io.ReadWriter 接口，并通过互斥锁保证了并发安全性
+// SafeByteSlice 实现了阻塞式 io.ReadWriteCloser，并通过互斥锁保证并发安全。
 type SafeByteSlice struct {
 	buffer bytes.Buffer
 	sync.Mutex
+	cond   *sync.Cond
+	closed bool
 }
 
 // NewSafeByteSlice 创建一个 SafeByteSlice 实例
 func NewSafeByteSlice() *SafeByteSlice {
-	return &SafeByteSlice{}
+	s := &SafeByteSlice{}
+	s.cond = sync.NewCond(&s.Mutex)
+	return s
 }
 
 // Read 实现了 io.Reader 接口
@@ -204,6 +224,13 @@ func (s *SafeByteSlice) Read(p []byte) (n int, err error) {
 	s.Lock()
 	defer s.Unlock()
 
+	s.initCond()
+	for s.buffer.Len() == 0 && !s.closed {
+		s.cond.Wait()
+	}
+	if s.buffer.Len() == 0 && s.closed {
+		return 0, io.EOF
+	}
 	return s.buffer.Read(p)
 }
 
@@ -212,5 +239,28 @@ func (s *SafeByteSlice) Write(p []byte) (n int, err error) {
 	s.Lock()
 	defer s.Unlock()
 
-	return s.buffer.Write(p)
+	s.initCond()
+	if s.closed {
+		return 0, io.ErrClosedPipe
+	}
+	n, err = s.buffer.Write(p)
+	s.cond.Signal()
+	return n, err
+}
+
+// Close 关闭缓冲区并唤醒阻塞中的读操作。
+func (s *SafeByteSlice) Close() error {
+	s.Lock()
+	defer s.Unlock()
+
+	s.initCond()
+	s.closed = true
+	s.cond.Broadcast()
+	return nil
+}
+
+func (s *SafeByteSlice) initCond() {
+	if s.cond == nil {
+		s.cond = sync.NewCond(&s.Mutex)
+	}
 }
