@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
+	goserver "github.com/zboyco/go-server/v2"
 )
 
 // runTCPBeginEndDemo 演示 TCP + BeginEnd 协议下的核心能力：

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
+	goserver "github.com/zboyco/go-server/v2"
 )
 
 // Option 描述一个 SimpleClient 构造选项。

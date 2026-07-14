@@ -1,10 +1,20 @@
-# v1 迁移指南
+# v2 迁移指南
 
-v1 是一次直接的破坏性升级，不提供旧 API 兼容层。迁移前先升级到 Go 1.21 或更高版本，并在独立分支完成编译、竞态测试和真实协议回归。
+v2 是一次直接的破坏性升级，不提供 v1 API 兼容层。迁移前先升级到 Go 1.21 或更高版本，并在独立分支完成编译、竞态测试和真实协议回归。
+
+## 模块路径
+
+Go Modules 要求主版本号从 v2 开始写入模块路径。升级依赖时请显式选择 `v2.0.0`：
+
+```bash
+go get github.com/zboyco/go-server/v2@v2.0.0
+```
+
+同时将 Go 文件中的导入路径从 `github.com/zboyco/go-server` 改为 `github.com/zboyco/go-server/v2`。`client`、`filter` 等子包也必须在仓库名后添加 `/v2`。
 
 ## API 对照
 
-| 旧版 | v1 | 说明 |
+| v1 | v2 | 说明 |
 | --- | --- | --- |
 | `New(network, ip, port)` | `New(network, address, opts...)` | 传入完整地址并处理 `(*Server, error)` |
 | `NewTCP(ip, port)` | `NewTCP(address, opts...)` | 使用 `net.JoinHostPort` 安全处理 IPv6 |
@@ -29,7 +39,7 @@ v1 是一次直接的破坏性升级，不提供旧 API 兼容层。迁移前先
 server := goserver.New(goserver.TCP, host, port)
 ```
 
-v1 使用标准完整地址和函数式选项：
+v2 使用标准完整地址和函数式选项：
 
 ```go
 address := net.JoinHostPort(host, strconv.Itoa(port))
@@ -54,13 +64,13 @@ TLS 握手现在必须在会话注册前完成，默认握手超时为 10 秒。
 // 旧版
 func(session *goserver.AppSession, payload []byte) ([]byte, error)
 
-// v1
+// v2
 func(ctx context.Context, session *goserver.AppSession, payload []byte) ([]byte, error)
 ```
 
 该 context 与会话生命周期绑定，服务器开始关闭时会取消。阻塞 I/O 和业务调用应继续向下传递它。返回非 `nil` 数据仍会自动发送，返回 `nil` 表示不响应。
 
-模块反射方法也必须改为完整的新签名，否则 v1 会忽略该方法：
+模块反射方法也必须改为完整的新签名，否则 v2 会忽略该方法：
 
 ```go
 func (*module) Ping(ctx context.Context, session *goserver.AppSession, payload []byte) ([]byte, error)
@@ -147,7 +157,7 @@ matched := server.FindSessions(func(attributes map[string]any) bool {
 
 ## UDP 行为变化
 
-v1 不再跨 UDP 数据报拼包。每个数据报必须包含完整帧；数据报末尾的半帧会作为 `ErrInvalidFrame` 或具体过滤器错误处理，并关闭该远端会话。
+v2 不再跨 UDP 数据报拼包。每个数据报必须包含完整帧；数据报末尾的半帧会作为 `ErrInvalidFrame` 或具体过滤器错误处理，并关闭该远端会话。
 
 默认处理模型改为固定数量的有界有序分片：
 
@@ -203,7 +213,7 @@ TCP framing 在读取超时后会保留半帧，下一次 `Receive` 可使用新
 
 ## 错误和可观测性
 
-v1 导出稳定的 sentinel errors。错误通常会通过 `%w` 包装上下文，因此使用 `errors.Is`：
+v2 导出稳定的 sentinel errors。错误通常会通过 `%w` 包装上下文，因此使用 `errors.Is`：
 
 ```go
 if errors.Is(err, goserver.ErrSessionClosed) {

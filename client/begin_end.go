@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	goserver "github.com/zboyco/go-server"
-	"github.com/zboyco/go-server/filter"
+	goserver "github.com/zboyco/go-server/v2"
+	"github.com/zboyco/go-server/v2/filter"
 )
 
 // BeginEndMarkClient 使用 BeginEndMarkReceiveFilter 的起止标记封装出站消息并解析入站帧。

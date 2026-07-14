@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
-	"github.com/zboyco/go-server/filter"
+	goserver "github.com/zboyco/go-server/v2"
+	"github.com/zboyco/go-server/v2/filter"
 )
 
 // runProtocolErrorDemo 演示内置过滤器错误及服务端 OnError 的 errors.Is 判断方式。

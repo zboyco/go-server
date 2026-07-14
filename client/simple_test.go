@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
-	"github.com/zboyco/go-server/filter"
+	goserver "github.com/zboyco/go-server/v2"
+	"github.com/zboyco/go-server/v2/filter"
 )
 
 // TestNewSimpleClientRejectsInvalidConfig verifies constructor failures are explicit.

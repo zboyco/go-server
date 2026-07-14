@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
+	goserver "github.com/zboyco/go-server/v2"
 )
 
 // runSessionLifecycleDemo 演示会话属性、原始发送、幂等关闭和关闭后错误语义。

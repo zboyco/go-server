@@ -8,9 +8,9 @@ import (
 	"io"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
-	"github.com/zboyco/go-server/client"
-	"github.com/zboyco/go-server/filter"
+	goserver "github.com/zboyco/go-server/v2"
+	"github.com/zboyco/go-server/v2/client"
+	"github.com/zboyco/go-server/v2/filter"
 )
 
 // runCustomSplitDemo 演示 SetSplitFunc、自定义长度前缀协议和客户端 Scanner 配置。

@@ -7,7 +7,7 @@ import (
 	"io"
 	"net"
 
-	goserver "github.com/zboyco/go-server"
+	goserver "github.com/zboyco/go-server/v2"
 )
 
 // frameReader 在有界缓冲区上执行 SplitFunc，并在暂时性 TCP 读取错误之间保留未完成数据。

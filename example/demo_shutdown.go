@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
+	goserver "github.com/zboyco/go-server/v2"
 )
 
 // runShutdownDemo 演示 Addr() 随机端口与 Shutdown(ctx) 可控停机。

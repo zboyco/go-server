@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
+	goserver "github.com/zboyco/go-server/v2"
 )
 
 // runTCPOnMessageDemo 演示默认换行拆包 + OnMessage 模式。

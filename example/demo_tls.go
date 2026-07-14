@@ -8,7 +8,7 @@ import (
 	"net"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
+	goserver "github.com/zboyco/go-server/v2"
 )
 
 // runTLSDemo 演示 WithTLS 选项与 TLS 客户端通信。

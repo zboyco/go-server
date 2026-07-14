@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zboyco/go-server/filter"
+	"github.com/zboyco/go-server/v2/filter"
 )
 
 // Network 表示服务端或客户端使用的传输层协议。

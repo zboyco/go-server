@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
-	"github.com/zboyco/go-server/client"
-	"github.com/zboyco/go-server/filter"
+	goserver "github.com/zboyco/go-server/v2"
+	"github.com/zboyco/go-server/v2/client"
+	"github.com/zboyco/go-server/v2/filter"
 )
 
 type actionContext = context.Context

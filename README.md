@@ -2,7 +2,7 @@
 
 `go-server` 是一个基于 Go 标准库构建的 TCP/UDP 应用层网络库，面向需要自定义拆包、命令路由、会话管理和可控停机的服务端场景。
 
-当前主线是破坏性升级后的 v1 API，要求 Go 1.21 或更高版本。由旧版升级时，请先阅读 [MIGRATION.md](MIGRATION.md)。
+当前主线是遵循 Go 模块语义化导入版本规范的 v2 API，要求 Go 1.21 或更高版本。由 v1 升级时，请先阅读 [MIGRATION.md](MIGRATION.md)。
 
 ## 核心能力
 
@@ -19,7 +19,7 @@
 ## 安装
 
 ```bash
-go get github.com/zboyco/go-server
+go get github.com/zboyco/go-server/v2@v2.0.0
 ```
 
 ## 快速开始
@@ -36,7 +36,7 @@ import (
 	"syscall"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
+	goserver "github.com/zboyco/go-server/v2"
 )
 
 func main() {

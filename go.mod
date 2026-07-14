@@ -1,4 +1,4 @@
-module github.com/zboyco/go-server
+module github.com/zboyco/go-server/v2
 
 go 1.21
 

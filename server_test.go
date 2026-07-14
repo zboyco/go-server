@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zboyco/go-server/filter"
+	"github.com/zboyco/go-server/v2/filter"
 )
 
 type valueModule struct{}

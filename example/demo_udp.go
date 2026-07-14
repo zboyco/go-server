@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
+	goserver "github.com/zboyco/go-server/v2"
 )
 
 // runUDPBeginEndDemo 演示 inline UDP BeginEnd 路由，以及同一远端地址会话复用。

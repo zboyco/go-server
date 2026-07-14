@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	goserver "github.com/zboyco/go-server"
+	goserver "github.com/zboyco/go-server/v2"
 )
 
 // runUDPConnectionFilterDemo 演示 UDP 连接过滤器拒绝首包并允许后续数据包。
