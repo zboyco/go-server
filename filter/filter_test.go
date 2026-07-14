@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -72,6 +73,21 @@ func TestFixedHeaderSplitRejectsInvalidPackageLength(t *testing.T) {
 
 	if _, _, err := filter.SplitFunc()(data, false); !errors.Is(err, ErrInvalidPackageLength) {
 		t.Fatalf("invalid package length error = %v, want %v", err, ErrInvalidPackageLength)
+	}
+}
+
+// TestFixedHeaderSplitDoesNotConvertOversizedUint32 verifies the int conversion remains range guarded.
+func TestFixedHeaderSplitDoesNotConvertOversizedUint32(t *testing.T) {
+	filter := &FixedHeaderReceiveFilter{}
+	data := make([]byte, 4)
+	binary.BigEndian.PutUint32(data, math.MaxUint32)
+
+	advance, token, err := filter.SplitFunc()(data, false)
+	if err != nil || advance != 0 || token != nil {
+		t.Fatalf("incomplete oversized frame = (%d, %v, %v)", advance, token, err)
+	}
+	if _, _, err := filter.SplitFunc()(data, true); !errors.Is(err, ErrInvalidPackageLength) {
+		t.Fatalf("oversized frame at EOF error = %v, want %v", err, ErrInvalidPackageLength)
 	}
 }
 

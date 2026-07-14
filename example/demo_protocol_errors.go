@@ -6,7 +6,6 @@ import (
 	"time"
 
 	goserver "github.com/zboyco/go-server"
-	"github.com/zboyco/go-server/client"
 	"github.com/zboyco/go-server/filter"
 )
 
@@ -16,10 +15,9 @@ func runProtocolErrorDemo() result {
 		assertBuiltInProtocolErrors(t)
 
 		errCh := make(chan error, 1)
-		server := goserver.NewTCP("127.0.0.1", 0)
-		server.IdleSessionTimeOut = 0
+		server := newTCPServer(t, "127.0.0.1", 0, goserver.WithIdleTimeout(0))
 		must(t, server.SetReceiveFilter(&filter.FixedHeaderReceiveFilter{}))
-		must(t, server.SetOnMessage(func(_ *goserver.AppSession, _ []byte) ([]byte, error) {
+		must(t, server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, _ []byte) ([]byte, error) {
 			return nil, nil
 		}))
 		must(t, server.SetOnError(func(err error) {
@@ -31,14 +29,14 @@ func runProtocolErrorDemo() result {
 
 		addr, done := startServer(t, server)
 		host, port := hostPort(t, addr)
-		cli := client.NewSimpleClient(goserver.TCP, host, port)
-		must(t, cli.Connect())
+		cli := newSimpleClient(t, goserver.TCP, host, port)
+		must(t, cli.Connect(backgroundContext))
 		defer cli.Close()
 
 		// 包长小于固定头的 8 字节时，服务端应通过 OnError 返回可识别的协议错误。
 		invalidPacket := make([]byte, 4)
 		binary.BigEndian.PutUint32(invalidPacket, 4)
-		must(t, cli.Send(invalidPacket))
+		must(t, cli.Send(backgroundContext, invalidPacket))
 
 		select {
 		case err := <-errCh:
@@ -49,7 +47,7 @@ func runProtocolErrorDemo() result {
 			t.Fatalf("timeout waiting for protocol error")
 		}
 
-		must(t, server.Stop())
+		must(t, server.Close())
 		waitServerExit(t, done)
 	})
 }

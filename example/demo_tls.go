@@ -11,14 +11,13 @@ import (
 	goserver "github.com/zboyco/go-server"
 )
 
-// runTLSDemo 演示 NewTCPWithTLS 与 TLS 客户端通信。
+// runTLSDemo 演示 WithTLS 选项与 TLS 客户端通信。
 func runTLSDemo() result {
 	return runDemo("tcp tls on-message", func(t *demoT) {
 		serverTLS, clientTLS := generateTLSConfig(t)
-		server := goserver.NewTCPWithTLS("127.0.0.1", 0, serverTLS)
-		server.IdleSessionTimeOut = 0
+		server := newTCPServer(t, "127.0.0.1", 0, goserver.WithIdleTimeout(0), goserver.WithTLS(serverTLS))
 
-		must(t, server.SetOnMessage(func(_ *goserver.AppSession, token []byte) ([]byte, error) {
+		must(t, server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, token []byte) ([]byte, error) {
 			return append([]byte("TLS:"), token...), nil
 		}))
 
@@ -44,7 +43,7 @@ func runTLSDemo() result {
 			t.Fatalf("tls response = %q, want %q", string(got), string(want))
 		}
 
-		must(t, server.Stop())
+		must(t, server.Close())
 		waitServerExit(t, done)
 	})
 }

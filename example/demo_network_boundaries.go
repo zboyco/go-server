@@ -9,7 +9,6 @@ import (
 	"time"
 
 	goserver "github.com/zboyco/go-server"
-	"github.com/zboyco/go-server/client"
 )
 
 // runUDPConnectionFilterDemo 演示 UDP 连接过滤器拒绝首包并允许后续数据包。
@@ -19,27 +18,26 @@ func runUDPConnectionFilterDemo() result {
 		var actionCalls int32
 		rejected := errors.New("reject first udp packet")
 
-		server := goserver.NewUDP("127.0.0.1", 0)
-		server.IdleSessionTimeOut = 0
+		server := newUDPServer(t, "127.0.0.1", 0, goserver.WithIdleTimeout(0))
 		must(t, server.RegisterConnectionFilterUDP(func(_ *net.UDPAddr) error {
 			if atomic.AddInt32(&attempts, 1) == 1 {
 				return rejected
 			}
 			return nil
 		}))
-		must(t, server.SetOnMessage(func(_ *goserver.AppSession, token []byte) ([]byte, error) {
+		must(t, server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, token []byte) ([]byte, error) {
 			atomic.AddInt32(&actionCalls, 1)
 			return append([]byte("ALLOWED:"), token...), nil
 		}))
 
 		addr, done := startServer(t, server)
 		host, port := hostPort(t, addr)
-		cli := client.NewSimpleClient(goserver.UDP, host, port)
-		must(t, cli.Connect())
+		cli := newSimpleClient(t, goserver.UDP, host, port)
+		must(t, cli.Connect(backgroundContext))
 		defer cli.Close()
-		must(t, cli.GetRawConn().SetDeadline(time.Now().Add(4*time.Second)))
+		must(t, cli.Conn().SetDeadline(time.Now().Add(4*time.Second)))
 
-		must(t, cli.Send([]byte("blocked\n")))
+		must(t, cli.Send(backgroundContext, []byte("blocked\n")))
 		waitCondition(t, time.Second, "first UDP filter invocation", func() bool {
 			return atomic.LoadInt32(&attempts) >= 1
 		})
@@ -50,8 +48,8 @@ func runUDPConnectionFilterDemo() result {
 			t.Fatalf("rejected UDP packet invoked action %d time(s), want 0", got)
 		}
 
-		must(t, cli.Send([]byte("accepted\n")))
-		got, err := cli.Receive()
+		must(t, cli.Send(backgroundContext, []byte("accepted\n")))
+		got, err := cli.Receive(backgroundContext)
 		must(t, err)
 		if string(got) != "ALLOWED:accepted" {
 			t.Fatalf("UDP filter response = %q, want %q", string(got), "ALLOWED:accepted")
@@ -61,7 +59,7 @@ func runUDPConnectionFilterDemo() result {
 		}
 		waitSessionCount(t, server, 1)
 
-		must(t, server.Stop())
+		must(t, server.Close())
 		waitServerExit(t, done)
 	})
 }
@@ -77,9 +75,8 @@ func runIdleTimeoutDemo() result {
 // runTCPIdleTimeoutScenario 验证 TCP 读超时关闭会话并传递超时原因。
 func runTCPIdleTimeoutScenario(t *demoT) {
 	closed := make(chan string, 1)
-	server := goserver.NewTCP("127.0.0.1", 0)
-	server.IdleSessionTimeOut = 1
-	must(t, server.SetOnMessage(func(_ *goserver.AppSession, _ []byte) ([]byte, error) {
+	server := newTCPServer(t, "127.0.0.1", 0, goserver.WithIdleTimeout(time.Second))
+	must(t, server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, _ []byte) ([]byte, error) {
 		return nil, nil
 	}))
 	must(t, server.SetOnSessionClosed(func(_ *goserver.AppSession, reason string) {
@@ -88,8 +85,8 @@ func runTCPIdleTimeoutScenario(t *demoT) {
 
 	addr, done := startServer(t, server)
 	host, port := hostPort(t, addr)
-	cli := client.NewSimpleClient(goserver.TCP, host, port)
-	must(t, cli.Connect())
+	cli := newSimpleClient(t, goserver.TCP, host, port)
+	must(t, cli.Connect(backgroundContext))
 	defer cli.Close()
 	waitSessionCount(t, server, 1)
 
@@ -102,16 +99,15 @@ func runTCPIdleTimeoutScenario(t *demoT) {
 		t.Fatalf("timeout waiting for TCP idle session close")
 	}
 	waitSessionCount(t, server, 0)
-	must(t, server.Stop())
+	must(t, server.Close())
 	waitServerExit(t, done)
 }
 
 // runUDPIdleTimeoutScenario 验证 UDP 模拟会话会在空闲后关闭并从会话池移除。
 func runUDPIdleTimeoutScenario(t *demoT) {
 	closed := make(chan string, 1)
-	server := goserver.NewUDP("127.0.0.1", 0)
-	server.IdleSessionTimeOut = 1
-	must(t, server.SetOnMessage(func(_ *goserver.AppSession, _ []byte) ([]byte, error) {
+	server := newUDPServer(t, "127.0.0.1", 0, goserver.WithIdleTimeout(time.Second))
+	must(t, server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, _ []byte) ([]byte, error) {
 		return nil, nil
 	}))
 	must(t, server.SetOnSessionClosed(func(_ *goserver.AppSession, reason string) {
@@ -120,10 +116,10 @@ func runUDPIdleTimeoutScenario(t *demoT) {
 
 	addr, done := startServer(t, server)
 	host, port := hostPort(t, addr)
-	cli := client.NewSimpleClient(goserver.UDP, host, port)
-	must(t, cli.Connect())
+	cli := newSimpleClient(t, goserver.UDP, host, port)
+	must(t, cli.Connect(backgroundContext))
 	defer cli.Close()
-	must(t, cli.Send([]byte("idle\n")))
+	must(t, cli.Send(backgroundContext, []byte("idle\n")))
 	waitSessionCount(t, server, 1)
 
 	select {
@@ -135,7 +131,7 @@ func runUDPIdleTimeoutScenario(t *demoT) {
 		t.Fatalf("timeout waiting for UDP idle session close")
 	}
 	waitSessionCount(t, server, 0)
-	must(t, server.Stop())
+	must(t, server.Close())
 	waitServerExit(t, done)
 }
 
@@ -148,9 +144,8 @@ func runIPv6Demo() result {
 		}
 		must(t, probe.Close())
 
-		server := goserver.NewTCP("::1", 0)
-		server.IdleSessionTimeOut = 0
-		must(t, server.SetOnMessage(func(_ *goserver.AppSession, token []byte) ([]byte, error) {
+		server := newTCPServer(t, "::1", 0, goserver.WithIdleTimeout(0))
+		must(t, server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, token []byte) ([]byte, error) {
 			return append([]byte("IPV6:"), token...), nil
 		}))
 		addr, done := startServer(t, server)
@@ -170,7 +165,7 @@ func runIPv6Demo() result {
 			t.Fatalf("IPv6 response = %q, want %q", string(got), string(want))
 		}
 
-		must(t, server.Stop())
+		must(t, server.Close())
 		waitServerExit(t, done)
 	})
 }

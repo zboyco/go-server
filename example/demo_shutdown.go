@@ -11,15 +11,14 @@ import (
 // runShutdownDemo 演示 Addr() 随机端口与 Shutdown(ctx) 可控停机。
 func runShutdownDemo() result {
 	return runDemo("shutdown with context and addr", func(t *demoT) {
-		server := goserver.NewTCP("127.0.0.1", 0)
-		server.IdleSessionTimeOut = 0
-		must(t, server.SetOnMessage(func(_ *goserver.AppSession, token []byte) ([]byte, error) {
+		server := newTCPServer(t, "127.0.0.1", 0, goserver.WithIdleTimeout(0))
+		must(t, server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, token []byte) ([]byte, error) {
 			return token, nil
 		}))
 
 		done := make(chan struct{})
 		go func() {
-			server.Start()
+			_ = server.Serve()
 			close(done)
 		}()
 
@@ -45,9 +44,8 @@ func runShutdownDemo() result {
 // runRuntimeConfigGuardDemo 演示运行中修改配置会被拒绝。
 func runRuntimeConfigGuardDemo() result {
 	return runDemo("runtime config guard", func(t *demoT) {
-		server := goserver.NewTCP("127.0.0.1", 0)
-		server.IdleSessionTimeOut = 0
-		must(t, server.SetOnMessage(func(_ *goserver.AppSession, _ []byte) ([]byte, error) {
+		server := newTCPServer(t, "127.0.0.1", 0, goserver.WithIdleTimeout(0))
+		must(t, server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, _ []byte) ([]byte, error) {
 			return nil, nil
 		}))
 
@@ -55,12 +53,12 @@ func runRuntimeConfigGuardDemo() result {
 		_ = addr
 
 		// 运行中修改应返回 ErrServerRunning。
-		if err := server.SetOnMessage(func(_ *goserver.AppSession, _ []byte) ([]byte, error) {
+		if err := server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, _ []byte) ([]byte, error) {
 			return nil, nil
 		}); err != goserver.ErrServerRunning {
 			t.Fatalf("SetOnMessage while running error = %v, want %v", err, goserver.ErrServerRunning)
 		}
-		if err := server.Action("/x", func(_ *goserver.AppSession, _ []byte) ([]byte, error) {
+		if err := server.Action("/x", func(_ actionContext, _ *goserver.AppSession, _ []byte) ([]byte, error) {
 			return nil, nil
 		}); err != goserver.ErrServerRunning {
 			t.Fatalf("Action while running error = %v, want %v", err, goserver.ErrServerRunning)
@@ -69,7 +67,7 @@ func runRuntimeConfigGuardDemo() result {
 			t.Fatalf("SetEOF while running error = %v, want %v", err, goserver.ErrServerRunning)
 		}
 
-		must(t, server.Stop())
+		must(t, server.Close())
 		waitServerExit(t, done)
 		log.Printf("[runtime-guard] rejected runtime config changes as expected")
 	})

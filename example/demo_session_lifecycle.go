@@ -8,7 +8,6 @@ import (
 	"time"
 
 	goserver "github.com/zboyco/go-server"
-	"github.com/zboyco/go-server/client"
 )
 
 // runSessionLifecycleDemo 演示会话属性、原始发送、幂等关闭和关闭后错误语义。
@@ -18,9 +17,8 @@ func runSessionLifecycleDemo() result {
 		closedCh := make(chan string, 1)
 		var closedCalls int32
 
-		server := goserver.NewTCP("127.0.0.1", 0)
-		server.IdleSessionTimeOut = 0
-		must(t, server.SetOnMessage(func(_ *goserver.AppSession, _ []byte) ([]byte, error) {
+		server := newTCPServer(t, "127.0.0.1", 0, goserver.WithIdleTimeout(0))
+		must(t, server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, _ []byte) ([]byte, error) {
 			return nil, nil
 		}))
 		must(t, server.SetOnNewSessionRegister(func(session *goserver.AppSession) {
@@ -33,10 +31,10 @@ func runSessionLifecycleDemo() result {
 
 		addr, done := startServer(t, server)
 		host, port := hostPort(t, addr)
-		cli := client.NewSimpleClient(goserver.TCP, host, port)
-		must(t, cli.Connect())
+		cli := newSimpleClient(t, goserver.TCP, host, port)
+		must(t, cli.Connect(backgroundContext))
 		defer cli.Close()
-		must(t, cli.GetRawConn().SetDeadline(time.Now().Add(3*time.Second)))
+		must(t, cli.Conn().SetDeadline(time.Now().Add(3*time.Second)))
 
 		var session *goserver.AppSession
 		select {
@@ -62,16 +60,16 @@ func runSessionLifecycleDemo() result {
 		}
 		exerciseConcurrentSessionAttrs(t, session)
 
-		must(t, session.SendRaw([]byte("raw")))
+		must(t, session.SendRaw(backgroundContext, []byte("raw")))
 		got := make([]byte, 3)
-		_, err = io.ReadFull(cli.GetRawConn(), got)
+		_, err = io.ReadFull(cli.Conn(), got)
 		must(t, err)
 		if string(got) != "raw" {
 			t.Fatalf("SendRaw response = %q, want raw", string(got))
 		}
 
-		session.Close("example close")
-		session.Close("ignored duplicate close")
+		must(t, session.Close("example close"))
+		must(t, session.Close("ignored duplicate close"))
 		select {
 		case reason := <-closedCh:
 			if reason != "example close" {
@@ -83,18 +81,18 @@ func runSessionLifecycleDemo() result {
 		if calls := atomic.LoadInt32(&closedCalls); calls != 1 {
 			t.Fatalf("session close callback calls = %d, want 1", calls)
 		}
-		if !session.IsClosed {
-			t.Fatalf("session IsClosed = false after Close")
+		if !session.Closed() {
+			t.Fatalf("session Closed = false after Close")
 		}
-		if err := session.Send([]byte("after-close")); err == nil {
+		if err := session.Send(backgroundContext, []byte("after-close")); err == nil {
 			t.Fatalf("Send after Close should return an error")
 		}
-		if err := session.SendRaw([]byte("after-close")); err == nil {
+		if err := session.SendRaw(backgroundContext, []byte("after-close")); err == nil {
 			t.Fatalf("SendRaw after Close should return an error")
 		}
 		waitSessionCount(t, server, 0)
 
-		must(t, server.Stop())
+		must(t, server.Close())
 		waitServerExit(t, done)
 	})
 }

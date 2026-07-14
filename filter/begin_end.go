@@ -8,32 +8,32 @@ import (
 )
 
 var (
-	// ErrInvalidMarkLength 表示开始或结束标记为空，无法安全拆包。
+	// ErrInvalidMarkLength 表示 Begin 或 End 标记为空，无法形成可判定边界的协议帧。
 	ErrInvalidMarkLength = errors.New("begin and end marks must not be empty")
-
-	// ErrInvalidPackageLength 表示包长度不满足协议要求。
+	// ErrInvalidPackageLength 表示输入在流结束或数据报结束时仍不能组成完整协议包。
 	ErrInvalidPackageLength = errors.New("invalid package length")
-
-	// ErrInvalidTokenLength 表示 token 长度不足以解析协议头。
+	// ErrInvalidTokenLength 表示完整帧长度不足以包含协议规定的固定字段。
 	ErrInvalidTokenLength = errors.New("invalid token length")
-
-	// ErrInvalidActionNameLength 表示 action 名称长度超过 token 剩余长度。
+	// ErrInvalidActionNameLength 表示声明的 action 长度超过当前帧剩余字节数。
 	ErrInvalidActionNameLength = errors.New("invalid action name length")
 )
 
-// BeginEndMarkReceiveFilter 标记数据包开始和结尾字节
-// 数据包以Begin开始，End结尾
-// 中间1-4位代表ActionName长度
-// 剩余部分为 ActionName字符串 + 数据Body
+// BeginEndMarkReceiveFilter 使用固定字节序列标识每个应用层包的开始和结束。
+// 标记本身不会出现在 SplitFunc 返回的 token 中。
 type BeginEndMarkReceiveFilter struct {
+	// Begin 是非空的包起始标记。
 	Begin []byte
-	End   []byte
+	// End 是非空的包结束标记。
+	End []byte
 }
 
-// SplitFunc 返回拆包函数
-func (s *BeginEndMarkReceiveFilter) SplitFunc() bufio.SplitFunc {
-	beginLength := len(s.Begin)
-	endLength := len(s.End)
+// SplitFunc 返回基于 Begin 和 End 拆包的 bufio.SplitFunc。
+//
+// 函数会丢弃已确认不可能成为 Begin 前缀的垃圾字节，但保留最多 len(Begin)-1 个尾部字节，
+// 以处理跨 TCP Read 的起始标记；atEOF 时仍不完整的包返回 ErrInvalidPackageLength。
+func (filter *BeginEndMarkReceiveFilter) SplitFunc() bufio.SplitFunc {
+	beginLength := len(filter.Begin)
+	endLength := len(filter.End)
 	return func(data []byte, atEOF bool) (int, []byte, error) {
 		if beginLength == 0 || endLength == 0 {
 			return 0, nil, ErrInvalidMarkLength
@@ -41,44 +41,44 @@ func (s *BeginEndMarkReceiveFilter) SplitFunc() bufio.SplitFunc {
 		if atEOF && len(data) == 0 {
 			return 0, nil, nil
 		}
-		start, end := 0, 0
-		if start = bytes.Index(data, s.Begin); start < 0 {
+		start := bytes.Index(data, filter.Begin)
+		if start < 0 {
 			if atEOF {
-				return 0, nil, ErrInvalidPackageLength
+				return len(data), nil, ErrInvalidPackageLength
+			}
+			keep := beginLength - 1
+			if len(data) > keep {
+				return len(data) - keep, nil, nil
 			}
 			return 0, nil, nil
 		}
-		endOffset := bytes.Index(data[start+beginLength:], s.End)
+		endOffset := bytes.Index(data[start+beginLength:], filter.End)
 		if endOffset < 0 {
 			if atEOF {
-				return 0, nil, ErrInvalidPackageLength
+				return len(data), nil, ErrInvalidPackageLength
+			}
+			if start > 0 {
+				return start, nil, nil
 			}
 			return 0, nil, nil
 		}
-		end = start + beginLength + endOffset
+		end := start + beginLength + endOffset
 		return end + endLength, data[start+beginLength : end], nil
 	}
 }
 
-// ResolveAction 返回解析函数
-func (s *BeginEndMarkReceiveFilter) ResolveAction() ResolveActionFunc {
-	return func(token []byte) (actionName string, msg []byte, err error) {
+// ResolveAction 返回零拷贝的 action 与 payload 解析函数。
+// token 格式为 4 字节大端 action 长度、action 字节及剩余 payload；返回 payload 引用 token 内存。
+func (filter *BeginEndMarkReceiveFilter) ResolveAction() ResolveActionFunc {
+	return func(token []byte) (string, []byte, error) {
 		if len(token) < 4 {
-			err = ErrInvalidTokenLength
-			return
+			return "", nil, ErrInvalidTokenLength
 		}
-		actionNameLength := uint32(0)
-		err = binary.Read(bytes.NewReader(token[0:4]), binary.BigEndian, &actionNameLength)
-		if err != nil {
-			return
+		actionLength := binary.BigEndian.Uint32(token[:4])
+		if actionLength > uint32(len(token)-4) {
+			return "", nil, ErrInvalidActionNameLength
 		}
-		if actionNameLength > uint32(len(token)-4) {
-			err = ErrInvalidActionNameLength
-			return
-		}
-		actionEnd := 4 + int(actionNameLength)
-		actionName = string(token[4:actionEnd])
-		msg = token[actionEnd:]
-		return
+		actionEnd := 4 + int(actionLength)
+		return string(token[4:actionEnd]), token[actionEnd:], nil
 	}
 }

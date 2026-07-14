@@ -16,39 +16,39 @@ import (
 // runCustomSplitDemo 演示 SetSplitFunc、自定义长度前缀协议和客户端 Scanner 配置。
 func runCustomSplitDemo() result {
 	return runDemo("custom split function", func(t *demoT) {
-		server := goserver.NewTCP("127.0.0.1", 0)
-		server.IdleSessionTimeOut = 0
+		server := newTCPServer(t, "127.0.0.1", 0, goserver.WithIdleTimeout(0))
 		must(t, server.SetSplitFunc(lengthPrefixSplit))
 		must(t, server.RegisterSendPacketFilter(goserver.Middlewares{
-			func(_ *goserver.AppSession, buf []byte) ([]byte, error) {
+			func(_ actionContext, _ *goserver.AppSession, buf []byte) ([]byte, error) {
 				return lengthPrefixPacket(buf)
 			},
 		}))
-		must(t, server.SetOnMessage(func(_ *goserver.AppSession, token []byte) ([]byte, error) {
+		must(t, server.SetOnMessage(func(_ actionContext, _ *goserver.AppSession, token []byte) ([]byte, error) {
 			return append([]byte("CUSTOM:"), token...), nil
 		}))
 
 		addr, done := startServer(t, server)
 		host, port := hostPort(t, addr)
 
-		cli := client.NewSimpleClient(goserver.TCP, host, port)
-		cli.SetBufferSize(16)
-		cli.SetMaxScanTokenSize(1024)
-		cli.SetScannerSplitFunc(lengthPrefixSplit)
-		must(t, cli.Connect())
+		cli := newSimpleClient(t, goserver.TCP, host, port,
+			client.WithBufferSize(16),
+			client.WithMaxScanTokenSize(1024),
+			client.WithScannerSplitFunc(lengthPrefixSplit),
+		)
+		must(t, cli.Connect(backgroundContext))
 		defer cli.Close()
-		must(t, cli.GetRawConn().SetDeadline(time.Now().Add(3*time.Second)))
+		must(t, cli.Conn().SetDeadline(time.Now().Add(3*time.Second)))
 
 		packet, err := lengthPrefixPacket([]byte("hello"))
 		must(t, err)
-		must(t, cli.Send(packet))
-		got, err := cli.Receive()
+		must(t, cli.Send(backgroundContext, packet))
+		got, err := cli.Receive(backgroundContext)
 		must(t, err)
 		if string(got) != "CUSTOM:hello" {
 			t.Fatalf("custom split response = %q, want %q", string(got), "CUSTOM:hello")
 		}
 
-		must(t, server.Stop())
+		must(t, server.Close())
 		waitServerExit(t, done)
 	})
 }
@@ -106,31 +106,30 @@ func (*pipeReceiveFilter) ResolveAction() filter.ResolveActionFunc {
 // runCustomReceiveFilterDemo 演示自定义 ReceiveFilter 与命令路由协作。
 func runCustomReceiveFilterDemo() result {
 	return runDemo("custom receive filter", func(t *demoT) {
-		server := goserver.NewTCP("127.0.0.1", 0)
-		server.IdleSessionTimeOut = 0
+		server := newTCPServer(t, "127.0.0.1", 0, goserver.WithIdleTimeout(0))
 		must(t, server.SetReceiveFilter(&pipeReceiveFilter{}))
-		must(t, server.Action("/upper", func(_ *goserver.AppSession, token []byte) ([]byte, error) {
+		must(t, server.Action("/upper", func(_ actionContext, _ *goserver.AppSession, token []byte) ([]byte, error) {
 			return bytes.ToUpper(token), nil
 		}))
 
 		addr, done := startServer(t, server)
 		host, port := hostPort(t, addr)
 
-		cli := client.NewSimpleClient(goserver.TCP, host, port)
-		must(t, cli.Connect())
+		cli := newSimpleClient(t, goserver.TCP, host, port)
+		must(t, cli.Connect(backgroundContext))
 		defer cli.Close()
-		must(t, cli.GetRawConn().SetDeadline(time.Now().Add(3*time.Second)))
-		must(t, cli.Send([]byte("/upper|custom-filter\n")))
+		must(t, cli.Conn().SetDeadline(time.Now().Add(3*time.Second)))
+		must(t, cli.Send(backgroundContext, []byte("/upper|custom-filter\n")))
 
 		want := []byte("CUSTOM-FILTER")
 		got := make([]byte, len(want))
-		_, err := io.ReadFull(cli.GetRawConn(), got)
+		_, err := io.ReadFull(cli.Conn(), got)
 		must(t, err)
 		if !bytes.Equal(got, want) {
 			t.Fatalf("custom filter response = %q, want %q", string(got), string(want))
 		}
 
-		must(t, server.Stop())
+		must(t, server.Close())
 		waitServerExit(t, done)
 	})
 }

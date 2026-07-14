@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -16,8 +17,13 @@ import (
 	"time"
 
 	goserver "github.com/zboyco/go-server"
+	"github.com/zboyco/go-server/client"
 	"github.com/zboyco/go-server/filter"
 )
+
+type actionContext = context.Context
+
+var backgroundContext = context.Background()
 
 // result 记录单个演示的执行结果。
 type result struct {
@@ -135,7 +141,7 @@ func waitAddr(t *demoT, server *goserver.Server) net.Addr {
 	return nil
 }
 
-// waitServerExit 等待 Start 退出。
+// waitServerExit 等待 Serve 退出。
 func waitServerExit(t *demoT, done <-chan struct{}) {
 	t.Helper()
 	select {
@@ -174,21 +180,66 @@ func startServer(t *demoT, server *goserver.Server) (net.Addr, <-chan struct{}) 
 	t.Helper()
 	done := make(chan struct{})
 	go func() {
-		server.Start()
+		_ = server.Serve()
 		close(done)
 	}()
 	t.Cleanup(func() {
-		if err := server.Stop(); err != nil {
+		if err := server.Close(); err != nil {
 			t.Errorf("cleanup server: %v", err)
 		}
 		select {
 		case <-done:
 		case <-time.After(3 * time.Second):
-			t.Errorf("cleanup server: timeout waiting for Start to exit")
+			t.Errorf("cleanup server: timeout waiting for Serve to exit")
 		}
 	})
 	addr := waitAddr(t, server)
 	return addr, done
+}
+
+// endpoint joins a host and port using IPv6-safe formatting.
+func endpoint(host string, port int) string {
+	return net.JoinHostPort(host, fmt.Sprintf("%d", port))
+}
+
+// newTCPServer constructs a TCP server or fails the current demo.
+func newTCPServer(t *demoT, host string, port int, options ...goserver.Option) *goserver.Server {
+	t.Helper()
+	server, err := goserver.NewTCP(endpoint(host, port), options...)
+	must(t, err)
+	return server
+}
+
+// newUDPServer constructs a UDP server or fails the current demo.
+func newUDPServer(t *demoT, host string, port int, options ...goserver.Option) *goserver.Server {
+	t.Helper()
+	server, err := goserver.NewUDP(endpoint(host, port), options...)
+	must(t, err)
+	return server
+}
+
+// newServer constructs a server for network or fails the current demo.
+func newServer(t *demoT, network goserver.Network, host string, port int, options ...goserver.Option) *goserver.Server {
+	t.Helper()
+	server, err := goserver.New(network, endpoint(host, port), options...)
+	must(t, err)
+	return server
+}
+
+// newSimpleClient constructs a context-aware client or fails the current demo.
+func newSimpleClient(t *demoT, network goserver.Network, host string, port int, options ...client.Option) *client.SimpleClient {
+	t.Helper()
+	result, err := client.NewSimpleClient(network, endpoint(host, port), options...)
+	must(t, err)
+	return result
+}
+
+// newBeginEndClient constructs a framed client or fails the current demo.
+func newBeginEndClient(t *demoT, network goserver.Network, host string, port int, receiveFilter *filter.BeginEndMarkReceiveFilter, options ...client.Option) *client.BeginEndMarkClient {
+	t.Helper()
+	result, err := client.NewBeginEndMarkClient(network, endpoint(host, port), receiveFilter, options...)
+	must(t, err)
+	return result
 }
 
 // hostPort 从 net.Addr 解析 host 与 port。
